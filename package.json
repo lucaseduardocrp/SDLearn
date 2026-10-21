@@ -1,0 +1,18 @@
+{
+  "name": "sdlearn",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "services/shared",
+    "services/sdlearn-api",
+    "services/sdlearn-web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace services/shared && npm run build --workspace services/sdlearn-api && npm run build --workspace services/sdlearn-web",
+    "build:api": "npm run build --workspace services/sdlearn-api",
+    "build:web": "npm run build --workspace services/sdlearn-web",
+    "dev:api": "npm run start:dev --workspace services/sdlearn-api",
+    "dev:web": "npm run dev --workspace services/sdlearn-web",
+    "start:api": "npm run start:prod --workspace services/sdlearn-api"
+  }
+}
