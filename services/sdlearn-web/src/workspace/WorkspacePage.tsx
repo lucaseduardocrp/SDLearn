@@ -7,7 +7,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { ArrowLeft, Bomb, Check, CloudOff, FileCode2, Gavel, LayoutGrid, Lightbulb, LoaderCircle, PanelLeft, SlidersHorizontal, Timer } from 'lucide-react';
 import { simulateChaos } from '@shared/engine/chaos';
-import { designToMermaid, mermaidToDesign } from '@shared/engine/graph';
+import { designToMermaid, layeredLayout, mermaidToDesign } from '@shared/engine/graph';
 import { analyzeDesign } from '@shared/engine/rubric';
 import { api } from '../api';
 import { DifficultyBadge, ErrorState, PageLoading } from '../components/ui';
@@ -16,7 +16,7 @@ import { useAsync } from '../lib/useAsync';
 import type { ChaosRequest, ChaosResult, ChaosRun, ComponentKind, Design, Evaluation, PracticeSession, Problem } from '../types';
 import { CanvasEditor } from './CanvasEditor';
 import { ChaosPanel } from './ChaosPanel';
-import { decorateEdge, fromFlow, newComponentNode, newNoteNode, toFlow, type ComponentNodeData, type FlowEdge, type FlowNode } from './designModel';
+import { decorateEdge, designWarnings, fromFlow, newComponentNode, newNoteNode, toFlow, type ComponentNodeData, type FlowEdge, type FlowNode } from './designModel';
 import { Inspector } from './Inspector';
 import { JudgesPanel } from './JudgesPanel';
 import { MermaidPanel } from './MermaidPanel';
@@ -153,10 +153,28 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
     touch();
   }, [touch]);
 
-  const onEdgeChange = useCallback((id: string, patch: { label?: string; async?: boolean }) => {
-    setEdges((current) => current.map((edge) => edge.id === id ? decorateEdge({ ...edge, label: patch.label ?? edge.label, data: { ...edge.data, async: patch.async ?? edge.data?.async } }) : edge));
+  const onEdgeChange = useCallback((id: string, patch: { label?: string; async?: boolean; reverse?: boolean }) => {
+    setEdges((current) => current.map((edge) => {
+      if (edge.id !== id) return edge;
+      const next = decorateEdge({ ...edge, label: patch.label ?? edge.label, data: { ...edge.data, async: patch.async ?? edge.data?.async } });
+      return patch.reverse ? { ...next, source: edge.target, target: edge.source, sourceHandle: undefined, targetHandle: undefined } : next;
+    }));
     touch();
   }, [touch]);
+
+  const onLayout = useCallback(() => {
+    setNodes((current) => {
+      const components = current.filter((node) => node.type === 'component');
+      const positions = layeredLayout(components.map((node) => node.id), latest.current.edges);
+      const notes = current.filter((node) => node.type === 'note');
+      const bottom = Math.max(0, ...[...positions.values()].map((position) => position.y)) + 160;
+      return current.map((node) => node.type === 'component'
+        ? { ...node, position: positions.get(node.id) ?? node.position }
+        : { ...node, position: { x: notes.indexOf(node) * 240, y: bottom } });
+    });
+    touch();
+    window.setTimeout(() => void fitView({ padding: 0.25, minZoom: 0.65, maxZoom: 1.15, duration: 300 }), 50);
+  }, [fitView, touch]);
 
   const onDelete = useCallback(({ nodeId, edgeId }: SelectionState) => {
     if (nodeId) {
@@ -173,6 +191,7 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
   const labelOf = (id: string) => nodes.find((node) => node.id === id)?.data.label ?? id;
   const selectionLabel = selectedNode ? selectedNode.data.label || 'Nota' : selectedEdge ? `${labelOf(selectedEdge.source)} → ${labelOf(selectedEdge.target)}` : undefined;
 
+  const warnings = useMemo(() => designWarnings(nodes, edges), [nodes, edges]);
   const designForAnalysis = useMemo(() => ({ ...fromFlow(nodes, edges), notes, mermaid }), [nodes, edges, notes, mermaid]);
   const deferredDesign = useDeferredValue(designForAnalysis);
   const rubric = useMemo(() => analyzeDesign(deferredDesign, problem).rubric, [deferredDesign, problem]);
@@ -227,7 +246,7 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
     setSelection({});
     touch();
     setCenterTab('canvas');
-    window.setTimeout(() => void fitView({ padding: 0.3, duration: 300 }), 60);
+    window.setTimeout(() => void fitView({ padding: 0.25, minZoom: 0.65, maxZoom: 1.15, duration: 300 }), 60);
   }
 
   const componentCount = nodes.filter((node) => node.type === 'component').length;
@@ -279,7 +298,7 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
 
         <main className="workspace-center">
           {centerTab === 'canvas' ? (
-            <CanvasEditor nodes={nodes} edges={edges} overlay={overlay} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onAdd={onAdd} onSelectionChange={setSelection} />
+            <CanvasEditor nodes={nodes} edges={edges} overlay={overlay} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onAdd={onAdd} onSelectionChange={setSelection} onLayout={onLayout} />
           ) : (
             <MermaidPanel
               source={mermaid}
@@ -298,7 +317,7 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
             <button role="tab" aria-selected={rightTab === 'judges'} className={rightTab === 'judges' ? 'active' : ''} onClick={() => setRightTab('judges')}><Gavel size={13} />Juízes</button>
           </div>
           <div className="side-scroll">
-            {rightTab === 'inspect' && <Inspector node={selectedNode} edge={selectedEdge} nodes={nodes} rubric={rubric} onNodeChange={onNodeChange} onEdgeChange={onEdgeChange} onDelete={onDelete} />}
+            {rightTab === 'inspect' && <Inspector node={selectedNode} edge={selectedEdge} nodes={nodes} rubric={rubric} warnings={warnings} onNodeChange={onNodeChange} onEdgeChange={onEdgeChange} onDelete={onDelete} />}
             {rightTab === 'chaos' && (
               <ChaosPanel
                 selection={{ ...selection, label: selectionLabel }} result={overlay} runs={runs} running={chaosRunning} error={chaosError}

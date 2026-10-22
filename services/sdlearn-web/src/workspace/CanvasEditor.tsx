@@ -3,7 +3,7 @@ import {
   Background, BackgroundVariant, ConnectionMode, Controls, MiniMap, ReactFlow, useReactFlow,
   type EdgeChange, type NodeChange, type OnConnect, type OnSelectionChangeParams,
 } from '@xyflow/react';
-import { StickyNote } from 'lucide-react';
+import { Maximize, StickyNote, Workflow } from 'lucide-react';
 import { componentCategories, componentList } from '@shared/catalog/components';
 import type { ChaosResult, ComponentKind } from '../types';
 import type { FlowEdge, FlowNode } from './designModel';
@@ -21,11 +21,12 @@ interface CanvasEditorProps {
   onConnect: OnConnect;
   onAdd: (kind: ComponentKind | 'note', position: { x: number; y: number }) => void;
   onSelectionChange: (selection: { nodeId?: string; edgeId?: string }) => void;
+  onLayout: () => void;
 }
 
-export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChange, onConnect, onAdd, onSelectionChange }: CanvasEditorProps) {
+export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChange, onConnect, onAdd, onSelectionChange, onLayout }: CanvasEditorProps) {
   const wrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
 
   const displayEdges = useMemo(() => {
     if (!overlay) return edges;
@@ -98,8 +99,9 @@ export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChan
             connectionMode={ConnectionMode.Loose}
             deleteKeyCode={['Backspace', 'Delete']}
             fitView
-            fitViewOptions={{ padding: 0.3, maxZoom: 1.1 }}
+            fitViewOptions={{ padding: 0.25, minZoom: 0.65, maxZoom: 1.15 }}
             minZoom={0.2}
+            defaultEdgeOptions={{ interactionWidth: 24 }}
             maxZoom={2}
             snapToGrid
             snapGrid={[8, 8]}
@@ -111,10 +113,20 @@ export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChan
             <MiniMap pannable zoomable nodeStrokeWidth={2} maskColor="rgba(11, 10, 20, 0.7)" nodeColor={(node) => node.type === 'note' ? '#5b4a1f' : '#3b3459'} />
           </ReactFlow>
         </ChaosOverlayContext.Provider>
+        <div className="canvas-toolbar">
+          <button className="btn btn-ghost btn-sm" onClick={onLayout} title="Reorganiza os componentes em colunas, da esquerda (quem chama) para a direita (quem é chamado)"><Workflow size={14} />Organizar</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => void fitView({ padding: 0.25, minZoom: 0.65, maxZoom: 1.15, duration: 300 })} title="Enquadra o diagrama na tela"><Maximize size={14} />Centralizar</button>
+        </div>
+        <div className="canvas-legend" aria-label="Legenda">
+          <span><i className="legend-dot in" />entrada</span>
+          <span><i className="legend-dot out" />saída</span>
+          <span><i className="legend-line" />chamada síncrona</span>
+          <span><i className="legend-line async" />assíncrona</span>
+        </div>
         {nodes.length <= 1 && (
           <div className="canvas-hint">
             <strong>Comece pelo fluxo principal</strong>
-            <span>Arraste componentes da paleta e ligue a saída (direita) de um à entrada (esquerda) de outro.</span>
+            <span>Arraste componentes da paleta para cá. Depois puxe da <b>bolinha direita</b> (saída) de um componente até a <b>bolinha esquerda</b> (entrada) de outro: a seta significa “chama”.</span>
           </div>
         )}
       </div>

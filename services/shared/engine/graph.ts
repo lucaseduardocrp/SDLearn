@@ -27,9 +27,48 @@ export function inferKind(label: string, shapeHint?: ComponentKind): ComponentKi
   return shapeHint ?? 'service';
 }
 
-function mermaidId(id: string, index: number): string {
-  const cleaned = id.replace(/[^A-Za-z0-9_]/g, '');
-  return /^[A-Za-z]/.test(cleaned) && cleaned.length <= 24 ? cleaned : `n${index + 1}`;
+/** Readable Mermaid ids derived from the label: "WebSocket Server" -> WebSocketServer. */
+function mermaidId(label: string, index: number): string {
+  const words = label.normalize('NFD').replace(/\p{M}/gu, '').split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const cleaned = words.map((word) => word[0].toUpperCase() + word.slice(1)).join('').slice(0, 32);
+  return /^[A-Za-z]/.test(cleaned) ? cleaned : `N${index + 1}`;
+}
+
+export const LAYOUT_COLUMN_GAP = 260;
+export const LAYOUT_ROW_GAP = 110;
+
+/** Layered left-to-right layout: columns by BFS depth from the sources, rows centred in each column. */
+export function layeredLayout(ids: string[], edges: { source: string; target: string }[]): Map<string, { x: number; y: number }> {
+  const known = new Set(ids);
+  const links = edges.filter((edge) => known.has(edge.source) && known.has(edge.target) && edge.source !== edge.target);
+  const incoming = new Map(ids.map((id) => [id, 0]));
+  links.forEach((edge) => incoming.set(edge.target, incoming.get(edge.target)! + 1));
+  const depth = new Map<string, number>();
+  const queue = ids.filter((id) => incoming.get(id) === 0);
+  if (queue.length === 0 && ids.length) queue.push(ids[0]);
+  queue.forEach((id) => depth.set(id, 0));
+  for (;;) {
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const edge of links) {
+        if (edge.source === id && !depth.has(edge.target)) { depth.set(edge.target, depth.get(id)! + 1); queue.push(edge.target); }
+      }
+    }
+    const unplaced = ids.find((id) => !depth.has(id));
+    if (!unplaced) break;
+    depth.set(unplaced, 0);
+    queue.push(unplaced);
+  }
+  const columns = new Map<number, string[]>();
+  for (const id of ids) {
+    const column = depth.get(id)!;
+    columns.set(column, [...(columns.get(column) ?? []), id]);
+  }
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const [column, members] of columns) {
+    members.forEach((id, row) => positions.set(id, { x: column * LAYOUT_COLUMN_GAP, y: (row - (members.length - 1) / 2) * LAYOUT_ROW_GAP }));
+  }
+  return positions;
 }
 
 function mermaidLabel(text: string): string {
@@ -42,8 +81,8 @@ export function designToMermaid(design: Pick<Design, 'nodes' | 'edges'>): string
   const ids = new Map<string, string>();
   const used = new Set<string>();
   components.forEach((node, index) => {
-    let id = mermaidId(node.id, index);
-    while (used.has(id)) id = `${id}_${index}`;
+    let id = mermaidId(node.data.label || componentSpecs[node.data.kind ?? 'service'].label, index);
+    for (let suffix = 2; used.has(id); suffix += 1) id = `${id.replace(/\d+$/, '')}${suffix}`;
     used.add(id);
     ids.set(node.id, id);
   });
@@ -141,27 +180,12 @@ export function mermaidToDesign(source: string): MermaidImport {
   });
 
   const nodes: CanvasNode[] = [];
-  const depth = new Map<string, number>();
-  const incoming = new Map<string, number>([...parsed.keys()].map((id) => [id, 0]));
-  edges.forEach((edge) => incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1));
-  const queue = [...parsed.keys()].filter((id) => incoming.get(id) === 0);
-  if (queue.length === 0 && parsed.size) queue.push([...parsed.keys()][0]);
-  queue.forEach((id) => depth.set(id, 0));
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const edge of edges.filter((item) => item.source === id)) {
-      if (!depth.has(edge.target)) { depth.set(edge.target, depth.get(id)! + 1); queue.push(edge.target); }
-    }
-  }
-  const rows = new Map<number, number>();
+  const positions = layeredLayout([...parsed.keys()], edges);
   for (const node of parsed.values()) {
-    const column = depth.get(node.id) ?? 0;
-    const row = rows.get(column) ?? 0;
-    rows.set(column, row + 1);
     const replicaMatch = node.label.match(/\s*[×x](\d{1,3})$/);
     const label = replicaMatch ? node.label.slice(0, replicaMatch.index).trim() : node.label;
     nodes.push({
-      id: `m-${node.id}`, type: 'component', position: { x: column * 230, y: row * 120 },
+      id: `m-${node.id}`, type: 'component', position: positions.get(node.id)!,
       data: { kind: inferKind(label, node.hint), label, replicas: replicaMatch ? Math.max(1, Number(replicaMatch[1])) : 1 },
     });
   }

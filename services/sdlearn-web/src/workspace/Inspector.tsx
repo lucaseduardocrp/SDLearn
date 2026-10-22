@@ -1,9 +1,9 @@
-import { CircleCheck, CircleX, Minus, MousePointerClick, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, CircleCheck, CircleX, Minus, MousePointerClick, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { componentCategories, componentList, componentSpecs } from '@shared/catalog/components';
 import { formatRate } from '@shared/engine/chaos';
 import type { ComponentKind, RubricReport } from '../types';
 import { ScoreRing } from '../components/ui';
-import type { ComponentNodeData, FlowEdge, FlowNode } from './designModel';
+import type { ComponentNodeData, DesignWarning, FlowEdge, FlowNode } from './designModel';
 import { kindIcons } from './kindIcons';
 
 interface InspectorProps {
@@ -11,12 +11,13 @@ interface InspectorProps {
   edge?: FlowEdge;
   nodes: FlowNode[];
   rubric: RubricReport;
+  warnings: DesignWarning[];
   onNodeChange: (id: string, data: Partial<ComponentNodeData>) => void;
-  onEdgeChange: (id: string, patch: { label?: string; async?: boolean }) => void;
+  onEdgeChange: (id: string, patch: { label?: string; async?: boolean; reverse?: boolean }) => void;
   onDelete: (target: { nodeId?: string; edgeId?: string }) => void;
 }
 
-export function Inspector({ node, edge, nodes, rubric, onNodeChange, onEdgeChange, onDelete }: InspectorProps) {
+export function Inspector({ node, edge, nodes, rubric, warnings, onNodeChange, onEdgeChange, onDelete }: InspectorProps) {
   if (node?.type === 'component') {
     const spec = componentSpecs[node.data.kind];
     const Icon = kindIcons[node.data.kind];
@@ -64,7 +65,8 @@ export function Inspector({ node, edge, nodes, rubric, onNodeChange, onEdgeChang
     const target = nodes.find((item) => item.id === edge.target)?.data.label;
     return (
       <div className="inspector">
-        <div className="inspector-head"><div><strong>{source} → {target}</strong><small>Conexão</small></div></div>
+        <div className="inspector-head"><div><strong>{source} → {target}</strong><small><b>{source}</b> chama <b>{target}</b>. A seta aponta para quem recebe a chamada.</small></div></div>
+        <button className="btn btn-ghost btn-block" onClick={() => onEdgeChange(edge.id, { reverse: true })}><ArrowLeftRight size={14} />Inverter direção</button>
         <label className="field"><span>Rótulo</span><input maxLength={80} value={typeof edge.label === 'string' ? edge.label : ''} placeholder="ex.: HTTP, gRPC, publish, CDC" onChange={(event) => onEdgeChange(edge.id, { label: event.target.value })} /></label>
         <label className="toggle">
           <input type="checkbox" checked={Boolean(edge.data?.async)} onChange={(event) => onEdgeChange(edge.id, { async: event.target.checked })} />
@@ -79,6 +81,12 @@ export function Inspector({ node, edge, nodes, rubric, onNodeChange, onEdgeChang
   return (
     <div className="inspector">
       <div className="inspector-empty"><MousePointerClick size={18} /><span>Selecione um componente ou conexão para editar. <kbd>Del</kbd> remove a seleção.</span></div>
+      {warnings.length > 0 && (
+        <div className="design-warnings">
+          <span className="panel-label">Atenção ao desenho</span>
+          {warnings.map((warning) => <p key={warning.id}><TriangleAlert size={14} />{warning.text}</p>)}
+        </div>
+      )}
       <div className="live-check">
         <div className="live-check-head">
           <ScoreRing score={rubric.score} size={58} />

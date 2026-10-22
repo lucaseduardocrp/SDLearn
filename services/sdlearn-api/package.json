@@ -11,6 +11,7 @@
     "start:prod": "node dist/sdlearn-api/src/main.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
     "@azure/identity": "^4.7.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

@@ -52,3 +52,29 @@ export function newComponentNode(kind: ComponentKind, position: { x: number; y: 
 export function newNoteNode(position: { x: number; y: number }): NoteFlowNode {
   return { id: `note-${crypto.randomUUID().slice(0, 8)}`, type: 'note', position, data: { label: '' }, selected: true };
 }
+
+export interface DesignWarning { id: string; text: string; nodeId?: string; edgeId?: string }
+
+/** Cheap structural hints that help users read their own diagram. */
+export function designWarnings(nodes: FlowNode[], edges: FlowEdge[]): DesignWarning[] {
+  const warnings: DesignWarning[] = [];
+  const components = nodes.filter((node): node is ComponentFlowNode => node.type === 'component');
+  const byId = new Map(components.map((node) => [node.id, node]));
+  for (const edge of edges) {
+    const target = byId.get(edge.target);
+    const source = byId.get(edge.source);
+    if (target?.data.kind === 'client' && source && source.data.kind !== 'client') {
+      warnings.push({ id: `into-client-${edge.id}`, edgeId: edge.id, text: `${source.data.label} → ${target.data.label}: a seta aponta para o cliente. As setas indicam quem chama quem; normalmente o fluxo começa no Client.` });
+    }
+  }
+  for (const client of components.filter((node) => node.data.kind === 'client')) {
+    if (components.length > 1 && !edges.some((edge) => edge.source === client.id)) {
+      warnings.push({ id: `idle-client-${client.id}`, nodeId: client.id, text: `${client.data.label} não chama nenhum componente. Arraste da bolinha à direita dele até o primeiro componente.` });
+    }
+  }
+  const connected = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+  for (const node of components) {
+    if (components.length > 1 && !connected.has(node.id)) warnings.push({ id: `isolated-${node.id}`, nodeId: node.id, text: `${node.data.label} está solto: nenhuma conexão entra ou sai dele.` });
+  }
+  return warnings;
+}

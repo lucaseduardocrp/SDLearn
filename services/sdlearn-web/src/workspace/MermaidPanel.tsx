@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, RefreshCw, TriangleAlert } from 'lucide-react';
 
 interface MermaidPanelProps {
@@ -22,7 +22,8 @@ function loadMermaid() {
         darkMode: true, background: '#0b0a14', primaryColor: '#1a1729', primaryTextColor: '#ece9f7', primaryBorderColor: '#7c3aed',
         secondaryColor: '#151226', tertiaryColor: '#12101f', lineColor: '#8f89ab', textColor: '#ece9f7', edgeLabelBackground: '#12101f', fontSize: '14px',
       },
-      flowchart: { curve: 'basis', padding: 12 },
+      htmlLabels: false,
+      flowchart: { curve: 'basis', padding: 14, htmlLabels: false, nodeSpacing: 40, rankSpacing: 60 },
     });
     return mermaid;
   });
@@ -32,6 +33,7 @@ function loadMermaid() {
 export function MermaidPanel({ source, onChange, onGenerateFromCanvas, onApplyToCanvas, warnings }: MermaidPanelProps) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const holder = useRef<HTMLDivElement>(null);
   const baseId = useId().replace(/[^a-zA-Z0-9]/g, '');
 
   useEffect(() => {
@@ -49,6 +51,20 @@ export function MermaidPanel({ source, onChange, onGenerateFromCanvas, onApplyTo
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
   }, [source, baseId]);
+
+  // Mermaid sizes the viewBox from text measured off-screen, which can differ from the final render and
+  // clip labels. Refit it to the real content and let small diagrams grow to fill the preview.
+  useLayoutEffect(() => {
+    const element = holder.current?.querySelector('svg');
+    if (!element) return;
+    const box = element.getBBox();
+    if (!box.width || !box.height) return;
+    const pad = 16;
+    element.setAttribute('viewBox', `${box.x - pad} ${box.y - pad} ${box.width + pad * 2} ${box.height + pad * 2}`);
+    element.removeAttribute('height');
+    element.style.width = '100%';
+    element.style.maxWidth = `${Math.max((box.width + pad * 2) * 1.6, 360)}px`;
+  }, [svg]);
 
   return (
     <div className="mermaid-panel">
@@ -73,7 +89,7 @@ export function MermaidPanel({ source, onChange, onGenerateFromCanvas, onApplyTo
       </div>
       <div className="mermaid-preview" aria-label="Pré-visualização do diagrama">
         {error ? <div className="mermaid-error"><TriangleAlert size={16} /><span>{error}</span></div>
-          : svg ? <div className="mermaid-svg" dangerouslySetInnerHTML={{ __html: svg }} />
+          : svg ? <div ref={holder} className="mermaid-svg" dangerouslySetInnerHTML={{ __html: svg }} />
             : <p className="muted">Escreva um diagrama ou gere a partir do canvas.</p>}
       </div>
     </div>

@@ -118,7 +118,10 @@ test('mermaid round-trips canvas components, replicas and async edges', () => {
   const design = redundantDesign();
   design.edges.push(edge('cache', 'db', { async: true, label: 'writes' }));
   const source = designToMermaid(design);
-  assert.match(source, /db\[\("db ×3"\)\]/);
+  assert.match(source, /Db\[\("db ×3"\)\]/);
+  const twins = designToMermaid({ nodes: ['a', 'b'].map((id) => ({ ...node(id, 'websocket'), data: { kind: 'websocket', label: 'WebSocket Server', replicas: 1 } })), edges: [] });
+  assert.match(twins, /WebSocketServer\[/);
+  assert.match(twins, /WebSocketServer2\[/);
   const imported = mermaidToDesign(source);
   assert.equal(imported.nodes.length, 5);
   assert.equal(imported.nodes.find((item) => item.data.label === 'db').data.replicas, 3);
