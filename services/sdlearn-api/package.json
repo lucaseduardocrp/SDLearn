@@ -5,6 +5,7 @@
   "main": "dist/sdlearn-api/src/main.js",
   "scripts": {
     "build": "nest build",
+    "test": "npm run build && node --test",
     "start": "node dist/sdlearn-api/src/main.js",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/sdlearn-api/src/main.js"

@@ -1,38 +1,24 @@
 import type {
-  ArchitectureResponse,
-  ChaosRunListResponse,
-  ChaosRunResponse,
-  ChaosScenarioListResponse,
-  CreateSessionRequest,
-  EvaluationListResponse,
-  EvaluationResponse,
-  HealthResponse,
-  ProblemListResponse,
-  ProblemQuery,
-  ProblemResponse,
-  RequestEvaluationRequest,
-  SaveArchitectureRequest,
-  SessionListResponse,
-  SessionResponse,
-  StartChaosRunRequest,
-  UpdateSessionRequest,
+  Article, ArticleSummary, ChaosRequest, ChaosRun, ChaosScenario, CollectionResponse, Design, Evaluation,
+  HealthResponse, PracticeSession, Problem, ProblemSummary, SessionSummary,
 } from '../types';
 
 export interface ApiClient {
+  readonly mode: 'http' | 'local';
   getHealth(): Promise<HealthResponse>;
-  listProblems(query?: ProblemQuery): Promise<ProblemListResponse>;
-  getProblem(problemId: string): Promise<ProblemResponse>;
-  createSession(input: CreateSessionRequest): Promise<SessionResponse>;
-  listSessions(cursor?: string, limit?: number): Promise<SessionListResponse>;
-  getSession(sessionId: string): Promise<SessionResponse>;
-  updateSession(sessionId: string, input: UpdateSessionRequest): Promise<SessionResponse>;
-  saveArchitecture(sessionId: string, input: SaveArchitectureRequest): Promise<ArchitectureResponse>;
-  getArchitecture(sessionId: string): Promise<ArchitectureResponse>;
-  listChaosScenarios(category?: string): Promise<ChaosScenarioListResponse>;
-  startChaosRun(sessionId: string, input: StartChaosRunRequest): Promise<ChaosRunResponse>;
-  getChaosRun(runId: string): Promise<ChaosRunResponse>;
-  listRecentChaosRuns(): Promise<ChaosRunListResponse>;
-  requestEvaluation(sessionId: string, input: RequestEvaluationRequest): Promise<EvaluationResponse>;
-  listEvaluations(sessionId?: string, cursor?: string): Promise<EvaluationListResponse>;
-  getEvaluation(evaluationId: string): Promise<EvaluationResponse>;
+  listProblems(): Promise<CollectionResponse<ProblemSummary>>;
+  getProblem(problemId: string): Promise<Problem>;
+  listArticles(): Promise<CollectionResponse<ArticleSummary>>;
+  getArticle(slug: string): Promise<Article>;
+  createSession(problemId: string): Promise<PracticeSession>;
+  listSessions(problemId?: string): Promise<CollectionResponse<SessionSummary>>;
+  getSession(sessionId: string): Promise<PracticeSession>;
+  saveDesign(sessionId: string, design: Design): Promise<PracticeSession>;
+  deleteSession(sessionId: string): Promise<void>;
+  listChaosScenarios(): Promise<ChaosScenario[]>;
+  runChaos(sessionId: string, request: ChaosRequest): Promise<ChaosRun>;
+  listChaosRuns(sessionId: string): Promise<ChaosRun[]>;
+  requestEvaluation(sessionId: string): Promise<Evaluation>;
+  listEvaluations(sessionId?: string): Promise<CollectionResponse<Evaluation>>;
+  getEvaluation(evaluationId: string): Promise<Evaluation>;
 }

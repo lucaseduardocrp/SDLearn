@@ -9,10 +9,14 @@ const environmentSchema = z.object({
   PGHOST: optionalSetting,
   PGDATABASE: optionalSetting,
   PGUSER: optionalSetting,
+  JUDGE_PROVIDER: z.preprocess((value) => value === '' ? undefined : value, z.enum(['azure-openai', 'openai', 'none']).optional()),
   AZURE_OPENAI_ENDPOINT: optionalUrl,
   AZURE_OPENAI_DEPLOYMENT: optionalSetting,
   AZURE_OPENAI_API_KEY: optionalSetting,
   AZURE_OPENAI_API_VERSION: z.string().default('2024-10-21'),
+  OPENAI_API_KEY: optionalSetting,
+  OPENAI_BASE_URL: z.preprocess((value) => value === '' ? undefined : value, z.string().url().default('https://api.openai.com/v1')),
+  OPENAI_MODEL: z.preprocess((value) => value === '' ? undefined : value, z.string().default('gpt-4.1-mini')),
 });
 
 export interface AppConfig {
@@ -22,10 +26,14 @@ export interface AppConfig {
   databaseHost?: string;
   databaseName?: string;
   databaseUser?: string;
+  judgeProvider?: 'azure-openai' | 'openai' | 'none';
   azureOpenAiEndpoint?: string;
   azureOpenAiDeployment?: string;
   azureOpenAiApiKey?: string;
   azureOpenAiApiVersion: string;
+  openAiApiKey?: string;
+  openAiBaseUrl?: string;
+  openAiModel?: string;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -48,9 +56,13 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     databaseHost: values.PGHOST,
     databaseName: values.PGDATABASE,
     databaseUser: values.PGUSER,
+    judgeProvider: values.JUDGE_PROVIDER,
     azureOpenAiEndpoint: values.AZURE_OPENAI_ENDPOINT,
     azureOpenAiDeployment: values.AZURE_OPENAI_DEPLOYMENT,
     azureOpenAiApiKey: values.AZURE_OPENAI_API_KEY,
     azureOpenAiApiVersion: values.AZURE_OPENAI_API_VERSION,
+    openAiApiKey: values.OPENAI_API_KEY,
+    openAiBaseUrl: values.OPENAI_BASE_URL,
+    openAiModel: values.OPENAI_MODEL,
   };
 }

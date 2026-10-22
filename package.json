@@ -11,8 +11,14 @@
     "build": "npm run build --workspace services/shared && npm run build --workspace services/sdlearn-api && npm run build --workspace services/sdlearn-web",
     "build:api": "npm run build --workspace services/sdlearn-api",
     "build:web": "npm run build --workspace services/sdlearn-web",
+    "dev": "concurrently --kill-others-on-fail --names api,web --prefix-colors magenta,cyan \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm run start:dev --workspace services/sdlearn-api",
     "dev:web": "npm run dev --workspace services/sdlearn-web",
-    "start:api": "npm run start:prod --workspace services/sdlearn-api"
+    "start:api": "npm run start:prod --workspace services/sdlearn-api",
+    "dev:offline": "npm run dev:offline --workspace services/sdlearn-web",
+    "test": "npm test --workspace services/sdlearn-api && npm test --workspace services/sdlearn-web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

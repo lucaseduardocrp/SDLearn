@@ -16,7 +16,9 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "types": ["vite/client"],
+    "paths": { "@shared/*": ["../shared/*"] }
   },
-  "include": ["src"]
+  "include": ["src", "../shared/types", "../shared/catalog", "../shared/engine"]
 }
