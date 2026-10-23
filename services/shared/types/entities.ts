@@ -45,7 +45,11 @@ export interface Problem {
 export type ComponentKind =
   | 'client' | 'dns' | 'cdn' | 'load-balancer' | 'api-gateway' | 'service' | 'worker'
   | 'websocket' | 'cache' | 'sql' | 'nosql' | 'object-storage' | 'queue' | 'stream'
-  | 'search' | 'rate-limiter' | 'scheduler' | 'external';
+  | 'search' | 'rate-limiter' | 'scheduler' | 'external'
+  | 'auth' | 'workflow' | 'stream-processor' | 'data-warehouse' | 'vector-db' | 'observability';
+
+/** Value of a component option (see catalog/technologies). */
+export type ComponentOptionValue = string | number | boolean;
 
 export interface CanvasNode {
   id: string;
@@ -56,6 +60,10 @@ export interface CanvasNode {
     label: string;
     replicas?: number;
     notes?: string;
+    /** Concrete technology (catalog/technologies), e.g. 'rabbitmq' for a queue. */
+    tech?: string;
+    /** Kind-specific options such as delivery guarantees or cache hit ratio. */
+    config?: Record<string, ComponentOptionValue>;
   };
 }
 
@@ -65,6 +73,8 @@ export interface CanvasEdge {
   target: string;
   label?: string;
   async?: boolean;
+  /** Wire protocol (catalog/technologies `protocols`), e.g. 'grpc' or 'amqp'. */
+  protocol?: string;
 }
 
 export interface Design {

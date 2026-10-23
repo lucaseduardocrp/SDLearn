@@ -1,4 +1,5 @@
 import { componentSpecs } from '../catalog/components';
+import { componentOptions, detectTechnology, findProtocol, findTechnology, resolveConfig } from '../catalog/technologies';
 import type { CanvasEdge, CanvasNode, ComponentKind, Design } from '../types/entities';
 import { engineMessages } from '../i18n/engine';
 import type { Locale } from '../i18n/locale';
@@ -7,14 +8,20 @@ import type { Locale } from '../i18n/locale';
 // must win over generic compute words such as "job" or "api".
 const keywordKinds: [RegExp, ComponentKind][] = [
   [/\b(client|user|users|browser|mobile|app|driver|rider|agent|host)s?\b/i, 'client'],
-  [/\bdns\b/i, 'dns'],
+  [/\bdns\b|route ?53|traffic manager/i, 'dns'],
+  [/\b(auth|idp|identity|oauth|oidc|sso)\b|keycloak|auth0|okta|cognito|entra/i, 'auth'],
+  [/observab|monitor|prometheus|grafana|datadog|telemetry|tracing|cloudwatch|app insights/i, 'observability'],
+  [/vector|embedding|pinecone|qdrant|weaviate|pgvector|milvus/i, 'vector-db'],
+  [/warehouse|snowflake|bigquery|redshift|clickhouse|synapse|\bolap\b/i, 'data-warehouse'],
+  [/flink|stream ?process|kafka streams|spark streaming|dataflow|stream analytics/i, 'stream-processor'],
+  [/workflow|orchestrat|temporal|step functions|durable functions|\bsaga\b/i, 'workflow'],
   [/\bcdn\b|cloudfront|akamai|edge cache/i, 'cdn'],
   [/load ?balancer|\blb\b|\belb\b|\balb\b|haproxy|nginx/i, 'load-balancer'],
   [/rate ?limit/i, 'rate-limiter'],
   [/gateway/i, 'api-gateway'],
   [/cache|redis|memcache/i, 'cache'],
-  [/kafka|kinesis|stream|pulsar|event log|\blog\b/i, 'stream'],
-  [/queue|\bsqs\b|rabbit|\bmq\b/i, 'queue'],
+  [/kafka|kinesis|stream|pulsar|redpanda|event ?hubs?|event log|\blog\b/i, 'stream'],
+  [/queue|\bsqs\b|rabbit|\bmq\b|service ?bus|pub\/?sub|\bnats\b|activemq/i, 'queue'],
   [/elastic|search|solr|\bindex\b|opensearch/i, 'search'],
   [/\bs3\b|blob|object|bucket|storage/i, 'object-storage'],
   [/postgres|mysql|\bsql\b|rdbms|aurora|ledger|spanner/i, 'sql'],
@@ -95,7 +102,8 @@ export function designToMermaid(design: Pick<Design, 'nodes' | 'edges'>, locale?
   for (const node of components) {
     const kind = node.data.kind ?? 'service';
     const replicas = (node.data.replicas ?? 1) > 1 ? ` ×${node.data.replicas}` : '';
-    const label = mermaidLabel(`${node.data.label || componentSpecs[kind].label}${replicas}`);
+    const technology = findTechnology(node.data.tech);
+    const label = mermaidLabel(`${node.data.label || componentSpecs[kind].label}${technology ? ` · ${technology.label}` : ''}${replicas}`);
     const id = ids.get(node.id)!;
     const shape = kind === 'sql' || kind === 'nosql' || kind === 'object-storage' ? `[(${label})]`
       : kind === 'client' ? `([${label}])`
@@ -189,10 +197,15 @@ export function mermaidToDesign(source: string, locale?: Locale): MermaidImport 
   const positions = layeredLayout([...parsed.keys()], edges);
   for (const node of parsed.values()) {
     const replicaMatch = node.label.match(/\s*[×x](\d{1,3})$/);
-    const label = replicaMatch ? node.label.slice(0, replicaMatch.index).trim() : node.label;
+    let label = replicaMatch ? node.label.slice(0, replicaMatch.index).trim() : node.label;
+    const kind = inferKind(label, node.hint);
+    // "Orders · RabbitMQ" (our export format) or a technology named inside the label.
+    const suffix = label.match(/\s+·\s+([^·]+)$/);
+    const technology = (suffix && detectTechnology(kind, suffix[1])) || detectTechnology(kind, label);
+    if (suffix && technology && detectTechnology(kind, suffix[1])) label = label.slice(0, suffix.index).trim();
     nodes.push({
       id: `m-${node.id}`, type: 'component', position: positions.get(node.id)!,
-      data: { kind: inferKind(label, node.hint), label, replicas: replicaMatch ? Math.max(1, Number(replicaMatch[1])) : 1 },
+      data: { kind, label, replicas: replicaMatch ? Math.max(1, Number(replicaMatch[1])) : 1, ...(technology ? { tech: technology.id } : {}) },
     });
   }
   const seen = new Set<string>();
@@ -217,11 +230,17 @@ export function describeDesign(design: Design): string {
   if (!components.length) lines.push('- (none)');
   for (const node of components) {
     const kind = node.data.kind ?? 'service';
-    lines.push(`- ${node.data.label || componentSpecs[kind].label} [${componentSpecs[kind].label}] replicas=${node.data.replicas ?? 1}${node.data.notes ? ` — ${node.data.notes}` : ''}`);
+    const technology = findTechnology(node.data.tech);
+    const config = resolveConfig(kind, technology?.id, node.data.config);
+    const options = componentOptions[kind].map((option) => `${option.id}=${config[option.id]}`).join(', ');
+    lines.push(`- ${node.data.label || componentSpecs[kind].label} [${componentSpecs[kind].label}${technology ? `: ${technology.label}` : ''}] replicas=${node.data.replicas ?? 1}${options ? ` {${options}}` : ''}${node.data.notes ? ` — ${node.data.notes}` : ''}`);
   }
   lines.push('Connections:');
   if (!design.edges.length) lines.push('- (none)');
-  for (const edge of design.edges) lines.push(`- ${label(edge.source)} -> ${label(edge.target)}${edge.async ? ' (async)' : ''}${edge.label ? ` "${edge.label}"` : ''}`);
+  for (const edge of design.edges) {
+    const protocol = findProtocol(edge.protocol);
+    lines.push(`- ${label(edge.source)} -> ${label(edge.target)}${edge.async ? ' (async)' : ''}${protocol ? ` via ${protocol.label}` : ''}${edge.label ? ` "${edge.label}"` : ''}`);
+  }
   if (notes.length) {
     lines.push('Canvas annotations:');
     notes.forEach((note) => lines.push(`- ${note.data.label}`));

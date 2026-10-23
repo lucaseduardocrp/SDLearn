@@ -224,6 +224,42 @@ test('mermaid round-trips canvas components with readable ids', () => {
   assert.match(twins, /WebSocketServer2\[/);
 });
 
+test('technologies and options change the chaos model and survive a Mermaid round-trip', () => {
+  const pipeline = (queueData) => ({
+    nodes: [node('client', 'client'), node('api', 'service', 10), { ...node('queue', 'queue', 2), data: { kind: 'queue', label: 'queue', replicas: 2, ...queueData } }],
+    edges: [edge('client', 'api'), edge('api', 'queue')],
+    mermaid: '', notes: '',
+  });
+  const load = { peakRps: 20000, latencyBudgetMs: 200 };
+  // Two RabbitMQ nodes (40k each) absorb 20k req/s; two Storage Queue units (2k each) cannot.
+  assert.equal(simulateChaos(pipeline({ tech: 'rabbitmq' }), load, { scenarioId: 'traffic-spike', magnitude: 1 }).outcome, 'survived');
+  assert.notEqual(simulateChaos(pipeline({ tech: 'azure-storage-queue' }), load, { scenarioId: 'traffic-spike', magnitude: 1 }).outcome, 'survived');
+
+  const design = redundantDesign();
+  design.nodes[4].data = { kind: 'sql', label: 'db', replicas: 1 };
+  const dbLoad = (result) => result.nodes.find((item) => item.id === 'db').load;
+  const at = (hitRatio) => {
+    design.nodes.find((item) => item.id === 'cache').data.config = { hitRatio };
+    return dbLoad(simulateChaos(design, profile, { scenarioId: 'traffic-spike', magnitude: 1 }));
+  };
+  assert.ok(at(95) < at(50));
+
+  const paying = {
+    nodes: [node('client', 'client'), node('api', 'service', 3), { ...node('psp', 'external'), data: { kind: 'external', label: 'psp', replicas: 1 } }],
+    edges: [edge('client', 'api'), edge('api', 'psp')],
+    mermaid: '', notes: '',
+  };
+  assert.equal(simulateChaos(paying, profile, { scenarioId: 'node-failure', targetId: 'psp' }).outcome, 'outage');
+  paying.nodes[2].data.config = { circuitBreaker: true };
+  assert.notEqual(simulateChaos(paying, profile, { scenarioId: 'node-failure', targetId: 'psp' }).outcome, 'outage');
+
+  const source = designToMermaid(pipeline({ tech: 'azure-service-bus' }));
+  assert.match(source, /queue · Azure Service Bus/);
+  const imported = mermaidToDesign(source).nodes.find((item) => item.data.kind === 'queue');
+  assert.deepEqual([imported.data.label, imported.data.tech], ['queue', 'azure-service-bus']);
+  assert.equal(mermaidToDesign('flowchart LR\n  A[API] --> K[/Orders Kafka/]').nodes.find((item) => item.data.kind === 'stream').data.tech, 'kafka');
+});
+
 test('rubric rewards a complete, redundant design', () => {
   const problem = coreProblems.find((item) => item.id === 'url-shortener');
   assert.ok(analyzeDesign({ nodes: [node('client', 'client')], edges: [], mermaid: '', notes: '' }, problem).rubric.score < 20);

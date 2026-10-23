@@ -17,7 +17,8 @@ import { useAsync } from '../lib/useAsync';
 import type { ChaosRequest, ChaosResult, ChaosRun, ComponentKind, Design, Evaluation, PracticeSession, ProblemDetail } from '../types';
 import { CanvasEditor } from './CanvasEditor';
 import { ChaosPanel } from './ChaosPanel';
-import { decorateEdge, designWarnings, fromFlow, newComponentNode, newNoteNode, toFlow, type ComponentNodeData, type FlowEdge, type FlowNode } from './designModel';
+import { decorateEdge, designWarnings, duplicateNode, fromFlow, newComponentNode, newNoteNode, toFlow, type ComponentNodeData, type FlowEdge, type FlowNode } from './designModel';
+import type { EdgePatch } from './CanvasEditor';
 import { Inspector } from './Inspector';
 import { JudgesPanel } from './JudgesPanel';
 import { MermaidPanel } from './MermaidPanel';
@@ -130,7 +131,8 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
 
   const onNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
     setNodes((current) => applyNodeChanges(changes, current));
-    if (changes.some((change) => change.type !== 'select' && change.type !== 'dimensions')) touch();
+    // While dragging only the positions move; mark the design dirty once, when the drag ends.
+    if (changes.some((change) => change.type !== 'select' && change.type !== 'dimensions' && !(change.type === 'position' && change.dragging))) touch();
   }, [touch]);
 
   const onEdgesChange = useCallback((changes: EdgeChange<FlowEdge>[]) => {
@@ -144,22 +146,49 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
     touch();
   }, [touch]);
 
-  const onAdd = useCallback((kind: ComponentKind | 'note', position: { x: number; y: number }) => {
-    setNodes((current) => [...current.map((node) => node.selected ? { ...node, selected: false } : node), kind === 'note' ? newNoteNode(position) : newComponentNode(kind, position, current)]);
+  const onAdd = useCallback((kind: ComponentKind | 'note', position: { x: number; y: number }, tech?: string) => {
+    setNodes((current) => [...current.map((node) => node.selected ? { ...node, selected: false } : node), kind === 'note' ? newNoteNode(position) : newComponentNode(kind, position, current, tech)]);
     setEdges((current) => current.map((edge) => edge.selected ? { ...edge, selected: false } : edge));
     if (kind !== 'note') setRightTab((tab) => tab === 'judges' ? 'inspect' : tab);
     touch();
   }, [touch]);
 
   const onNodeChange = useCallback((id: string, patch: Partial<ComponentNodeData>) => {
-    setNodes((current) => current.map((node) => node.id === id && node.type === 'component' ? { ...node, data: { ...node.data, ...patch } } : node));
+    setNodes((current) => current.map((node) => {
+      if (node.id !== id || node.type !== 'component') return node;
+      // A technology and its options only make sense for the kind they were picked for.
+      const kindChanged = patch.kind !== undefined && patch.kind !== node.data.kind;
+      return { ...node, data: { ...node.data, ...(kindChanged ? { tech: undefined, config: undefined } : {}), ...patch } };
+    }));
     touch();
   }, [touch]);
 
-  const onEdgeChange = useCallback((id: string, patch: { label?: string; async?: boolean; reverse?: boolean }) => {
+  const onDuplicate = useCallback((nodeId: string) => {
+    setNodes((current) => {
+      const original = current.find((node) => node.id === nodeId);
+      if (!original) return current;
+      return [...current.map((node) => node.selected ? { ...node, selected: false } : node), duplicateNode(original, current)];
+    });
+    touch();
+  }, [touch]);
+
+  const onDisconnect = useCallback((nodeId: string) => {
+    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    touch();
+  }, [touch]);
+
+  const onInspect = useCallback(({ nodeId, edgeId }: SelectionState, reveal: boolean) => {
+    setNodes((current) => current.map((node) => node.selected === (node.id === nodeId) ? node : { ...node, selected: node.id === nodeId }));
+    setEdges((current) => current.map((edge) => edge.selected === (edge.id === edgeId) ? edge : { ...edge, selected: edge.id === edgeId }));
+    setSelection({ nodeId, edgeId });
+    if (reveal) setRightTab('inspect');
+  }, []);
+
+  const onEdgeChange = useCallback((id: string, patch: EdgePatch) => {
     setEdges((current) => current.map((edge) => {
       if (edge.id !== id) return edge;
-      const next = decorateEdge({ ...edge, label: patch.label ?? edge.label, data: { ...edge.data, async: patch.async ?? edge.data?.async } });
+      const protocol = patch.protocol === undefined ? edge.data?.protocol : patch.protocol ?? undefined;
+      const next = decorateEdge({ ...edge, label: patch.label ?? edge.label, data: { ...edge.data, async: patch.async ?? edge.data?.async, protocol } });
       return patch.reverse ? { ...next, source: edge.target, target: edge.source, sourceHandle: undefined, targetHandle: undefined } : next;
     }));
     touch();
@@ -188,6 +217,15 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
     setSelection({});
     touch();
   }, [touch]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const typing = event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]');
+      if (!typing && selection.nodeId && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); onDuplicate(selection.nodeId); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selection.nodeId, onDuplicate]);
 
   const selectedNode = nodes.find((node) => node.id === selection.nodeId);
   const selectedEdge = edges.find((edge) => edge.id === selection.edgeId);
@@ -301,7 +339,11 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
 
         <main className="workspace-center">
           {centerTab === 'canvas' ? (
-            <CanvasEditor nodes={nodes} edges={edges} overlay={overlay} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onAdd={onAdd} onSelectionChange={setSelection} onLayout={onLayout} />
+            <CanvasEditor
+              nodes={nodes} edges={edges} overlay={overlay} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onAdd={onAdd}
+              onSelectionChange={setSelection} onLayout={onLayout} onNodeChange={onNodeChange} onEdgeChange={onEdgeChange} onDelete={onDelete}
+              onDuplicate={onDuplicate} onDisconnect={onDisconnect} onInspect={onInspect}
+            />
           ) : (
             <MermaidPanel
               source={mermaid}

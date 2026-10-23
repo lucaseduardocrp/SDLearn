@@ -1,4 +1,5 @@
-import { componentSpecs, type ComponentSpec } from '../catalog/components';
+import { componentSpecs } from '../catalog/components';
+import { effectiveSpec, type EffectiveSpec } from '../catalog/technologies';
 import type {
   CanvasEdge, CanvasNode, ChaosRequest, ChaosResult, ChaosScenario, ComponentKind, NodeHealth, NodeReport,
 } from '../types/entities';
@@ -29,9 +30,7 @@ export class ChaosInputError extends Error {}
 export interface ChaosGraph { nodes: CanvasNode[]; edges: CanvasEdge[] }
 export interface ChaosLoadProfile { peakRps: number; latencyBudgetMs: number }
 
-const CACHE_HIT_RATIO = 0.8;
-const CDN_HIT_RATIO = 0.6;
-const STORAGE_KINDS = new Set<ComponentKind>(['sql', 'nosql', 'object-storage', 'search']);
+const STORAGE_KINDS = new Set<ComponentKind>(['sql', 'nosql', 'object-storage', 'search', 'vector-db', 'data-warehouse']);
 const healthRank: Record<NodeHealth, number> = { healthy: 0, degraded: 1, unreachable: 2, failing: 3, down: 4 };
 
 interface DependencyGroup { kind: ComponentKind; edges: CanvasEdge[]; soft: boolean; async: boolean }
@@ -59,7 +58,9 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
   const byId = new Map(components.map((node) => [node.id, node]));
   const edges = graph.edges.filter((edge) => byId.has(edge.source) && byId.has(edge.target) && edge.source !== edge.target);
   const kindOf = (id: string): ComponentKind => byId.get(id)!.data.kind!;
-  const specOf = (id: string): ComponentSpec => componentSpecs[kindOf(id)];
+  // Technology and options (hit ratio, circuit breaker…) change the generic kind's capacity model.
+  const specs = new Map(components.map((node) => [node.id, effectiveSpec(node.data)]));
+  const specOf = (id: string): EffectiveSpec => specs.get(id)!;
   const labelOf = (id: string): string => byId.get(id)!.data.label || specOf(id).label;
   const replicasOf = (id: string): number => Math.max(1, byId.get(id)!.data.replicas ?? 1);
 
@@ -126,9 +127,10 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     for (const edge of outgoing.get(id)!) {
       const kind = kindOf(edge.target);
       const async = Boolean(edge.async) || specOf(id).buffers;
-      const key = `${kind}:${async}`;
+      const targetSoft = specOf(edge.target).soft;
+      const key = `${kind}:${async}:${targetSoft}`;
       // Entry points have no fallback, so every dependency of a client is hard.
-      const group = groups.get(key) ?? { kind, edges: [], soft: (componentSpecs[kind].soft && !specOf(id).entry) || async, async };
+      const group = groups.get(key) ?? { kind, edges: [], soft: (targetSoft && !specOf(id).entry) || async, async };
       group.edges.push(edge);
       groups.set(key, group);
     }
@@ -136,7 +138,9 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     groupCache.set(id, result);
     return result;
   }
-  const hasLiveCache = (id: string) => groupsOf(id).some((group) => group.kind === 'cache' && group.edges.some((edge) => liveEdge(edge) && !isDown(edge.target)));
+  /** Hit ratio of the best live cache a component reads through, or 0 without one. */
+  const cacheHitOf = (id: string) => Math.max(0, ...groupsOf(id).filter((group) => group.kind === 'cache')
+    .flatMap((group) => group.edges.filter((edge) => liveEdge(edge) && !isDown(edge.target)).map((edge) => specOf(edge.target).hitRatio)));
 
   let entries = components.filter((node) => specOf(node.id).entry);
   if (entries.length === 0) entries = components.filter((node) => incomingCount.get(node.id) === 0);
@@ -210,18 +214,17 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     if (isDown(id) || incoming <= 0) continue;
     const spec = specOf(id);
     let forwarded = incoming;
-    if (spec.kind === 'cache') forwarded *= 1 - CACHE_HIT_RATIO;
-    if (spec.kind === 'cdn') forwarded *= 1 - CDN_HIT_RATIO;
+    if (spec.kind === 'cache' || spec.kind === 'cdn') forwarded *= 1 - spec.hitRatio;
     if (spec.buffers) {
       const consumerCapacity = outgoing.get(id)!.filter((edge) => liveEdge(edge) && !isDown(edge.target)).reduce((sum, edge) => sum + capacityOf(edge.target), 0);
       forwarded = Math.min(incoming, consumerCapacity);
       if (incoming - forwarded > 0) backlog.set(id, incoming - forwarded);
     }
-    const cached = hasLiveCache(id);
+    const cacheHit = cacheHitOf(id);
     for (const group of groupsOf(id)) {
       const alive = group.edges.filter((edge) => liveEdge(edge) && !isDown(edge.target));
       if (alive.length === 0) continue;
-      const groupLoad = cached && STORAGE_KINDS.has(group.kind) ? forwarded * (1 - CACHE_HIT_RATIO) : forwarded;
+      const groupLoad = STORAGE_KINDS.has(group.kind) ? forwarded * (1 - cacheHit) : forwarded;
       for (const edge of alive) load.set(edge.target, load.get(edge.target)! + groupLoad / alive.length);
     }
   }
@@ -291,14 +294,14 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     const utilization = capacity > 0 ? load.get(id)! / capacity : 1;
     let total = (spec.latencyMs + (extraLatency.get(id) ?? 0)) * (utilization > 1 ? Math.min(utilization, 10) : 1);
     if (!spec.buffers) {
-      const cached = hasLiveCache(id);
-      const passThrough = spec.kind === 'cache' ? 1 - CACHE_HIT_RATIO : spec.kind === 'cdn' ? 1 - CDN_HIT_RATIO : 1;
+      const cacheHit = cacheHitOf(id);
+      const passThrough = spec.kind === 'cache' || spec.kind === 'cdn' ? 1 - spec.hitRatio : 1;
       for (const group of groupsOf(id)) {
         if (group.async) continue;
         const alive = group.edges.filter((edge) => liveEdge(edge) && !isDown(edge.target));
         if (!alive.length) continue;
         const best = Math.min(...alive.map((edge) => latency(edge.target)));
-        total += best * passThrough * (cached && STORAGE_KINDS.has(group.kind) ? 1 - CACHE_HIT_RATIO : 1);
+        total += best * passThrough * (STORAGE_KINDS.has(group.kind) ? 1 - cacheHit : 1);
       }
     }
     latencyVisiting.delete(id);

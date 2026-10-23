@@ -3,6 +3,7 @@ import { z } from 'zod';
 const componentKinds = [
   'client', 'dns', 'cdn', 'load-balancer', 'api-gateway', 'service', 'worker', 'websocket', 'cache', 'sql',
   'nosql', 'object-storage', 'queue', 'stream', 'search', 'rate-limiter', 'scheduler', 'external',
+  'auth', 'workflow', 'stream-processor', 'data-warehouse', 'vector-db', 'observability',
 ] as const;
 const chaosScenarioIds = ['node-failure', 'replica-loss', 'network-partition', 'traffic-spike', 'latency-injection', 'chaos-monkey'] as const;
 
@@ -28,6 +29,8 @@ export const canvasNodeSchema = z.object({
     label: z.string().max(2000),
     replicas: z.number().int().min(1).max(100).optional(),
     notes: z.string().max(2000).optional(),
+    tech: z.string().trim().max(60).optional(),
+    config: z.record(z.string().max(60), z.union([z.string().max(200), z.number().finite(), z.boolean()])).refine((value) => Object.keys(value).length <= 40, 'too many options').optional(),
   }),
 });
 export const canvasEdgeSchema = z.object({
@@ -36,6 +39,7 @@ export const canvasEdgeSchema = z.object({
   target: idParamSchema,
   label: z.string().max(80).optional(),
   async: z.boolean().optional(),
+  protocol: z.string().trim().max(40).optional(),
 });
 export const designSchema = z.object({
   nodes: z.array(canvasNodeSchema).max(200),

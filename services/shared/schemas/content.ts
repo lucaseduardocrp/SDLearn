@@ -3,6 +3,7 @@ import { z } from 'zod';
 const componentKinds = [
   'client', 'dns', 'cdn', 'load-balancer', 'api-gateway', 'service', 'worker', 'websocket', 'cache', 'sql',
   'nosql', 'object-storage', 'queue', 'stream', 'search', 'rate-limiter', 'scheduler', 'external',
+  'auth', 'workflow', 'stream-processor', 'data-warehouse', 'vector-db', 'observability',
 ] as const;
 
 /** Lowercase slug: letters, digits and single dashes. Dots are reserved for pack namespacing. */
@@ -29,7 +30,7 @@ export const packProblemSchema = z.object({
   scale: z.array(z.object({ label: text(40), value: text(40) }).strict()).max(10),
   peakRps: z.number().int().min(1).max(100_000_000),
   latencyBudgetMs: z.number().int().min(1).max(60_000),
-  expectedKinds: z.array(z.enum(componentKinds)).min(1).max(18),
+  expectedKinds: z.array(z.enum(componentKinds)).min(1).max(componentKinds.length),
   hints: list(10, 400),
   relatedArticles: z.array(z.string().max(130)).max(10),
   keyPoints: z.array(keyPointSchema).min(3, 'a problem needs at least 3 key points for the judges').max(15),

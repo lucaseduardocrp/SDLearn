@@ -1,6 +1,6 @@
 import {
-  Archive, Clock, Cog, Cpu, Database, Earth, Gauge, Globe, Inbox, MonitorSmartphone, Plug, Radio, Search, ShieldCheck,
-  Split, Table2, Waves, Zap, type LucideIcon,
+  Activity, Archive, Clock, Cog, Cpu, Database, Earth, Fingerprint, Gauge, GitFork, Globe, Inbox, MonitorSmartphone, Plug, Radio, Search,
+  ShieldCheck, Shuffle, Sparkles, Split, Table2, Warehouse, Waves, Zap, type LucideIcon,
 } from 'lucide-react';
 import type { ComponentKind } from '../types';
 
@@ -23,4 +23,10 @@ export const kindIcons: Record<ComponentKind, LucideIcon> = {
   queue: Inbox,
   stream: Waves,
   external: Plug,
+  auth: Fingerprint,
+  workflow: GitFork,
+  'stream-processor': Shuffle,
+  'data-warehouse': Warehouse,
+  'vector-db': Sparkles,
+  observability: Activity,
 };

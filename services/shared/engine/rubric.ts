@@ -4,7 +4,7 @@ import { engineMessages } from '../i18n/engine';
 import type { Locale } from '../i18n/locale';
 import { simulateChaos } from './chaos';
 
-const equivalents: ComponentKind[][] = [['queue', 'stream'], ['sql', 'nosql'], ['load-balancer', 'api-gateway'], ['rate-limiter', 'api-gateway']];
+const equivalents: ComponentKind[][] = [['queue', 'stream'], ['sql', 'nosql'], ['load-balancer', 'api-gateway'], ['rate-limiter', 'api-gateway'], ['worker', 'stream-processor'], ['scheduler', 'workflow']];
 
 function satisfied(kind: ComponentKind, present: Set<ComponentKind>): boolean {
   return present.has(kind) || equivalents.some((group) => group.includes(kind) && group.some((other) => present.has(other)));
@@ -36,7 +36,7 @@ export function analyzeDesign(design: Design, problem: Pick<Problem, 'expectedKi
 
   const storageReached = baseline.nodes.some((node) => {
     const kind = components.find((item) => item.id === node.id)?.data.kind;
-    return kind && ['sql', 'nosql', 'object-storage', 'cache', 'search', 'stream'].includes(kind) && node.health !== 'unreachable';
+    return kind && ['sql', 'nosql', 'object-storage', 'cache', 'search', 'stream', 'data-warehouse', 'vector-db'].includes(kind) && node.health !== 'unreachable';
   });
   checks.push({ id: 'data-path', label: text.dataPath, weight: 10, passed: storageReached, detail: storageReached ? text.dataPathReached : text.dataPathMissing });
 

@@ -37,6 +37,12 @@ const specs: ComponentSpec[] = [
   { kind: 'search', label: 'Search Index', category: 'Data', description: 'Inverted index (Elasticsearch, OpenSearch).', capacityPerReplica: 8_000, latencyMs: 20, soft: true, buffers: false, entry: false },
   { kind: 'queue', label: 'Message Queue', category: 'Messaging', description: 'Durable work queue (SQS, RabbitMQ).', capacityPerReplica: 50_000, latencyMs: 2, soft: false, buffers: true, entry: false },
   { kind: 'stream', label: 'Event Stream', category: 'Messaging', description: 'Partitioned log (Kafka, Kinesis).', capacityPerReplica: 200_000, latencyMs: 2, soft: false, buffers: true, entry: false },
+  { kind: 'auth', label: 'Identity Provider', category: 'Edge', description: 'Authentication and token issuing (OIDC / OAuth 2.0).', capacityPerReplica: 20_000, latencyMs: 10, soft: false, buffers: false, entry: false },
+  { kind: 'workflow', label: 'Workflow Engine', category: 'Compute', description: 'Durable orchestration of long-running, multi-step processes.', capacityPerReplica: 5_000, latencyMs: 10, soft: false, buffers: true, entry: false },
+  { kind: 'stream-processor', label: 'Stream Processor', category: 'Compute', description: 'Stateful processing of event streams (windows, joins, aggregations).', capacityPerReplica: 50_000, latencyMs: 0, soft: false, buffers: false, entry: false },
+  { kind: 'data-warehouse', label: 'Data Warehouse', category: 'Data', description: 'Columnar analytics store for reporting and BI.', capacityPerReplica: 500, latencyMs: 400, soft: true, buffers: false, entry: false },
+  { kind: 'vector-db', label: 'Vector Database', category: 'Data', description: 'Similarity search over embeddings (semantic search, RAG).', capacityPerReplica: 3_000, latencyMs: 15, soft: false, buffers: false, entry: false },
+  { kind: 'observability', label: 'Observability', category: 'Other', description: 'Metrics, logs and traces collection with alerting.', capacityPerReplica: 100_000, latencyMs: 0, soft: true, buffers: false, entry: false },
   { kind: 'external', label: 'External API', category: 'Other', description: 'Third-party dependency (payments, SMS, email).', capacityPerReplica: 2_000, latencyMs: 120, soft: false, buffers: false, entry: false },
 ];
 
