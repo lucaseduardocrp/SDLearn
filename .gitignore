@@ -9,3 +9,5 @@ coverage/
 data/
 postgres-data/
 .azure/.preview-temp/
+# The published hub index and bundles are served straight from the repository.
+!hub/dist/

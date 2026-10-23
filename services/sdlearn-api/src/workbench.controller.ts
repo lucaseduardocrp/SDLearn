@@ -19,8 +19,8 @@ export class WorkbenchController {
   }
 
   @Get('problems/:problemId')
-  getProblem(@Param('problemId', new ZodValidationPipe(idParamSchema)) problemId: string) {
-    return { problem: this.service.getProblem(problemId) };
+  async getProblem(@Param('problemId', new ZodValidationPipe(idParamSchema)) problemId: string) {
+    return { problem: await this.service.getProblem(problemId) };
   }
 
   @Get('articles')
@@ -29,8 +29,8 @@ export class WorkbenchController {
   }
 
   @Get('articles/:slug')
-  getArticle(@Param('slug', new ZodValidationPipe(idParamSchema)) slug: string) {
-    return { article: this.service.getArticle(slug) };
+  async getArticle(@Param('slug', new ZodValidationPipe(idParamSchema)) slug: string) {
+    return { article: await this.service.getArticle(slug) };
   }
 
   @Post('sessions')

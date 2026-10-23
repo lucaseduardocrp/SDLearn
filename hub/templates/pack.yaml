@@ -1,0 +1,9 @@
+# The id must match the folder name under hub/packs/.
+id: my-pack
+name: My Pack
+version: 1.0.0                 # bump it when you change the pack so installed users see an update
+description: What this pack teaches, in one or two sentences.
+author: Your Name
+license: CC-BY-4.0
+# homepage: https://github.com/you/your-repo
+tags: [caching]

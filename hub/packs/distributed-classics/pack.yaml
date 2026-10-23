@@ -1,0 +1,7 @@
+id: distributed-classics
+name: Distributed Classics
+version: 1.0.0
+description: Two classic distributed-systems interview problems (job scheduler and collaborative editor) with articles on consensus and conflict-free replication.
+author: Archon community
+license: CC-BY-4.0
+tags: [consensus, scheduling, collaboration, crdt]

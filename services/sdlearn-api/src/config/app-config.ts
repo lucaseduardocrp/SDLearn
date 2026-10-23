@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { z } from 'zod';
 
 const optionalUrl = z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional());
@@ -17,6 +18,12 @@ const environmentSchema = z.object({
   OPENAI_API_KEY: optionalSetting,
   OPENAI_BASE_URL: z.preprocess((value) => value === '' ? undefined : value, z.string().url().default('https://api.openai.com/v1')),
   OPENAI_MODEL: z.preprocess((value) => value === '' ? undefined : value, z.string().default('gpt-4.1-mini')),
+  ANTHROPIC_API_KEY: optionalSetting,
+  GEMINI_API_KEY: optionalSetting,
+  XAI_API_KEY: optionalSetting,
+  OLLAMA_BASE_URL: optionalUrl,
+  SECRETS_KEY: optionalSetting,
+  HUB_INDEX_URL: optionalSetting,
 });
 
 export interface AppConfig {
@@ -34,6 +41,14 @@ export interface AppConfig {
   openAiApiKey?: string;
   openAiBaseUrl?: string;
   openAiModel?: string;
+  anthropicApiKey?: string;
+  geminiApiKey?: string;
+  xaiApiKey?: string;
+  ollamaBaseUrl?: string;
+  /** Encrypts provider API keys saved from the settings page. */
+  secretsKey?: string;
+  /** Hub index location (https URL or file path). Defaults to the hub/ folder in this repository. */
+  hubIndexUrl: string;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -64,5 +79,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     openAiApiKey: values.OPENAI_API_KEY,
     openAiBaseUrl: values.OPENAI_BASE_URL,
     openAiModel: values.OPENAI_MODEL,
+    anthropicApiKey: values.ANTHROPIC_API_KEY,
+    geminiApiKey: values.GEMINI_API_KEY,
+    xaiApiKey: values.XAI_API_KEY,
+    ollamaBaseUrl: values.OLLAMA_BASE_URL,
+    secretsKey: values.SECRETS_KEY,
+    hubIndexUrl: values.HUB_INDEX_URL ?? resolve(__dirname, '../../../../../../hub/dist/index.json'),
   };
 }

@@ -5,11 +5,12 @@ export interface CollectionResponse<T> {
   nextCursor: string | null;
 }
 
-export type ProblemSummary = Pick<Problem, 'id' | 'number' | 'title' | 'difficulty' | 'summary' | 'tags' | 'estimatedMinutes'>;
+export type ProblemSummary = Pick<Problem, 'id' | 'number' | 'title' | 'difficulty' | 'summary' | 'tags' | 'estimatedMinutes' | 'source'>;
+export type ProblemDetail = Omit<Problem, 'keyPoints'> & { keyPointCount: number };
 export type ArticleSummary = Omit<Article, 'body'>;
 export type SessionSummary = Omit<PracticeSession, 'design'> & { componentCount: number };
 
-export interface ProblemResponse { problem: Problem }
+export interface ProblemResponse { problem: ProblemDetail }
 export interface SessionResponse { session: PracticeSession }
 export interface ChaosScenarioResponse { items: ChaosScenario[] }
 export interface ChaosRunResponse { run: ChaosRun }

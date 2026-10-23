@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, SearchX } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Package, Search, SearchX, X } from 'lucide-react';
 import { api } from '../api';
 import { DifficultyBadge, EmptyState, ErrorState, PageLoading, TagChip } from '../components/ui';
 import { padNumber, scoreTone } from '../lib/format';
@@ -15,6 +15,8 @@ export function LibraryPage() {
   const sessions = useAsync(() => api.listSessions(), []);
   const [difficulty, setDifficulty] = useState<'All' | Difficulty>('All');
   const [query, setQuery] = useState('');
+  const [params, setParams] = useSearchParams();
+  const packFilter = params.get('pack');
 
   const progress = useMemo(() => {
     const byProblem = new Map<string, { best: number | null; count: number }>();
@@ -28,6 +30,7 @@ export function LibraryPage() {
   const visible = (problems.data?.items ?? []).filter((problem) => {
     const text = query.trim().toLowerCase();
     return (difficulty === 'All' || problem.difficulty === difficulty)
+      && (!packFilter || problem.source?.packId === packFilter)
       && (!text || `${problem.title} ${problem.summary} ${problem.tags.join(' ')}`.toLowerCase().includes(text));
   });
 
@@ -48,14 +51,18 @@ export function LibraryPage() {
             <button key={item} className={`pill${difficulty === item ? ' active' : ''}`} aria-pressed={difficulty === item} onClick={() => setDifficulty(item)}>{item}</button>
           ))}
         </div>
-        <label className="search-field">
-          <Search size={15} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar problema ou conceito…" aria-label="Buscar problemas" />
-        </label>
+        <div className="library-toolbar-right">
+          {packFilter && <button className="pill active" onClick={() => setParams({})} title="Mostrar todos os desafios"><Package size={13} /> {packFilter} <X size={12} /></button>}
+          {api.mode === 'http' && <Link to="/hub" className="btn btn-ghost btn-sm"><Package size={14} />Mais desafios no Hub</Link>}
+          <label className="search-field">
+            <Search size={15} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar problema ou conceito…" aria-label="Buscar problemas" />
+          </label>
+        </div>
       </div>
 
       {problems.loading ? <PageLoading /> : problems.error ? <ErrorState message={problems.error} onRetry={problems.reload} /> : visible.length === 0 ? (
-        <EmptyState icon={<SearchX size={22} />} title="Nenhum problema encontrado" body="Tente outra dificuldade ou outro termo de busca." action={<button className="btn btn-ghost" onClick={() => { setQuery(''); setDifficulty('All'); }}>Limpar filtros</button>} />
+        <EmptyState icon={<SearchX size={22} />} title="Nenhum problema encontrado" body="Tente outra dificuldade ou outro termo de busca." action={<button className="btn btn-ghost" onClick={() => { setQuery(''); setDifficulty('All'); setParams({}); }}>Limpar filtros</button>} />
       ) : (
         <div className="problem-grid">
           {visible.map((problem) => {
@@ -63,7 +70,7 @@ export function LibraryPage() {
             return (
               <Link key={problem.id} to={`/problems/${problem.id}`} className="problem-card">
                 <div className="problem-card-top">
-                  <span className="mono-dim">{padNumber(problem.number)}</span>
+                  <span className="mono-dim">{padNumber(problem.number)}{problem.source && <span className="source-chip" title={`Pacote ${problem.source.packName} ${problem.source.version}`}><Package size={11} />{problem.source.packName}</span>}</span>
                   <DifficultyBadge difficulty={problem.difficulty} />
                 </div>
                 <h3>{problem.title}</h3>

@@ -8,15 +8,17 @@
 - **Canvas** — React Flow canvas with 18 component types (client, CDN, load balancer, services, caches, SQL/NoSQL, queues, streams…), replicas per component, sync/async connections and sticky-note annotations. Autosaves.
 - **Mermaid editor** — generate Mermaid from the canvas, or write Mermaid and apply it to the canvas (shapes and names like "Redis" or "Kafka" are mapped to component types; `×3` sets replicas; `-.->` is async).
 - **Chaos Lab** — deterministic simulation over your graph: kill a component, lose replicas, partition a connection, spike traffic, inject latency or let the Chaos Monkey choose. It models capacity per replica, cache hit ratios (and the database stampede when the cache dies), queue buffering, hard vs soft dependencies, end-to-end latency, and detects single points of failure. Results are painted on the canvas.
-- **Two AI judges** — *O Rigoroso* (rigor) and *O Pragmático* (pragmatism) score independently, read each other's assessment and rebut, then a moderator produces the consensus score (always between their revised scores), strengths, improvements and next steps.
+- **Two AI judges** — *O Rigoroso* (rigor) and *O Pragmático* (pragmatism) grade independently against a per-problem grading key, read each other's assessment and rebut, and a moderator writes the consensus feedback. Each role can use a different provider and model (OpenAI, Anthropic, Gemini, Grok, Ollama or Azure OpenAI), configured from the **Configurações** page.
+- **Community hub** — content packs (problems with grading keys, plus articles) written in Markdown, browsed and installed from the **Hub** page. See [hub/README.md](hub/README.md) to contribute.
 - **Automatic pre-check** — a deterministic rubric (expected components, connectivity, data path, SPOFs, peak capacity, latency, documented trade-offs) shown live while you draw and passed to the judges as evidence. Without an AI provider you still get this pre-check, clearly labelled as not being a judge score.
 - **Learning library** — 20 articles (Portuguese) on caching, sharding, replication, queues, streaming, rate limiting, real-time, idempotency, resilience, geospatial indexing and more, each linked to the problems where it applies.
 
 ## Layout
 
-- `services/shared` — types, validation, problem/article/component catalogs and the engines (chaos simulation, Mermaid ⇄ canvas, rubric). Used by both API and web.
+- `services/shared` — types, validation, problem/article/component catalogs, grading keys, the pack builder and the engines (chaos simulation, Mermaid ⇄ canvas, rubric). Used by both API and web.
 - `services/sdlearn-api` — NestJS API, PostgreSQL persistence, judge panel and LLM providers.
 - `services/sdlearn-web` — React + Vite frontend.
+- `hub/` — community content packs and the published hub index (`hub/dist`).
 
 ## Local development
 
@@ -40,13 +42,34 @@ The Vite dev server proxies `/api` to `http://localhost:3000`. Tables are create
 
 ## AI judges
 
-Configure one provider in `.env`:
+Open **Configurações** (gear icon), connect one or more providers, then choose a provider and model for each role (O Rigoroso, O Pragmático, Moderador). **Testar** sends a tiny request to confirm the key and model work. Using different models for the two judges makes their assessments more independent.
 
-- **OpenAI or any OpenAI-compatible endpoint** — set `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`, `OPENAI_BASE_URL`). For a keyless local server such as Ollama, set `JUDGE_PROVIDER=openai` and `OPENAI_BASE_URL=http://localhost:11434/v1`.
-- **Azure OpenAI** — set `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT`; in Development also `AZURE_OPENAI_API_KEY`, elsewhere the API uses managed identity.
+| Provider | What you need |
+|---|---|
+| OpenAI | API key. A custom base URL turns it into any OpenAI-compatible endpoint (LM Studio, vLLM, OpenRouter). |
+| Anthropic | API key. Uses the official SDK with structured outputs; `claude-opus-5-5` is suggested. |
+| Google Gemini | AI Studio API key. |
+| Grok (xAI) | xAI API key. |
+| Ollama | A running Ollama (`ollama serve`) and a pulled model. No key. |
+| Azure OpenAI | Endpoint, deployment and, in Development, an API key. |
 
-An evaluation runs in the background (5 model calls: 2 assessments, 2 rebuttals, 1 consensus) and the page shows its progress. If a provider call fails, the evaluation is marked failed with the reason; no score is invented.
+Keys saved from the page are encrypted with AES-256-GCM when `SECRETS_KEY` is set in `.env`; without it they are stored in plain text and the page warns about it. Keys can also come from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `OLLAMA_BASE_URL`, `AZURE_OPENAI_*`).
+
+How a submission is graded:
+
+1. **Pre-check** — the deterministic rubric and chaos baseline run first and are passed to the judges as evidence.
+2. **Independent assessments** — each judge marks every key point of the problem's grading key as covered, partial or missing, quoting evidence, and gives a holistic score. Judge score = 60% weighted key-point coverage + 40% holistic.
+3. **Debate** — each judge reads the other's assessment and may revise its score by at most 15 points.
+4. **Consensus** — the server computes the final score (mean of the revised scores); the moderator writes the feedback. Pass ≥ 75, borderline 55–74, fail < 55.
+
+The candidate's canvas and notes are fenced as data in the prompt, so instructions written in them are ignored. With **Consistência 3×**, each judge runs three times and the median is used (9 model calls instead of 5). Evaluations run in the background; if a provider fails, the evaluation is marked failed with the reason and no score is invented. The grading key is only revealed in the evaluation result.
+
+## Community hub
+
+The **Hub** page lists the packs published by the configured hub (by default `hub/dist/index.json` in this repository) and installs them with one click. Each bundle is checked against the SHA-256 in the index and validated before installation. Installed problems get ids like `<pack-id>.<problem-id>` and continue the library numbering. **Importar pacote .json** installs a single bundle without a hub.
+
+To contribute content, follow [hub/README.md](hub/README.md): write Markdown with YAML frontmatter, run `npm run hub:check`, then `npm run hub:build`, and open a pull request. To share your own hub, publish the repository and set the Hub page address (or `HUB_INDEX_URL`) to the raw URL of `hub/dist/index.json`.
 
 ## Tests
 
-`npm test` runs the API tests (catalog, sessions, chaos engine, Mermaid round-trip, rubric, judge panel with a fake provider) and the web tests.
+`npm test` runs the API tests (catalog and grading keys, sessions, hub install with checksum, chaos engine, Mermaid round-trip, rubric, judge panel scoring, debate limits and sampling with a fake provider, prompt fencing, key encryption, OpenAI-compatible and Ollama adapters against a local HTTP server) and the web tests.

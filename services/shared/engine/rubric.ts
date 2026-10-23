@@ -10,7 +10,7 @@ function satisfied(kind: ComponentKind, present: Set<ComponentKind>): boolean {
 
 export interface DesignAnalysis { rubric: RubricReport; baseline: ChaosResult }
 
-export function analyzeDesign(design: Design, problem: Problem): DesignAnalysis {
+export function analyzeDesign(design: Design, problem: Pick<Problem, 'expectedKinds' | 'peakRps' | 'latencyBudgetMs'>): DesignAnalysis {
   const components = design.nodes.filter((node) => node.type === 'component' && node.data.kind);
   const present = new Set(components.map((node) => node.data.kind!));
   const baseline = simulateChaos(design, problem, { scenarioId: 'traffic-spike', magnitude: 1 });

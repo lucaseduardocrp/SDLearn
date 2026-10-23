@@ -1,5 +1,4 @@
-import { articles, findArticle } from '@shared/catalog/articles';
-import { findProblem, problems } from '@shared/catalog/problems';
+import { coreCatalog } from '@shared/catalog/catalog';
 import { chaosScenarios, simulateChaos } from '@shared/engine/chaos';
 import { analyzeDesign } from '@shared/engine/rubric';
 import type { ChaosRun, Evaluation, PracticeSession } from '../types';
@@ -35,6 +34,9 @@ function requireSession(id: string): PracticeSession {
   return session;
 }
 
+const { problems, articles, findProblem, findArticle } = coreCatalog;
+const needsApi = () => Promise.reject(new Error('Disponível apenas com a API rodando (npm run dev). O modo offline usa só o conteúdo nativo e a pré-avaliação.'));
+
 function requireProblem(id: string) {
   const problem = findProblem(id);
   if (!problem) throw new Error('Problema não encontrado.');
@@ -52,8 +54,11 @@ const delay = <T>(value: T): Promise<T> => new Promise((resolve) => window.setTi
 export const localClient: ApiClient = {
   mode: 'local',
   getHealth: () => delay({ status: 'ok', services: { api: 'ok', database: 'ok', 'ai-judges': 'unavailable' }, judgeProvider: null }),
-  listProblems: () => delay({ items: problems.map(({ id, number, title, difficulty, summary, tags, estimatedMinutes }) => ({ id, number, title, difficulty, summary, tags, estimatedMinutes })), nextCursor: null }),
-  getProblem: async (id) => delay(requireProblem(id)),
+  listProblems: () => delay({ items: problems.map(({ id, number, title, difficulty, summary, tags, estimatedMinutes, source }) => ({ id, number, title, difficulty, summary, tags, estimatedMinutes, source })), nextCursor: null }),
+  getProblem: async (id) => {
+    const { keyPoints, ...problem } = requireProblem(id);
+    return delay({ ...problem, keyPointCount: keyPoints.length });
+  },
   listArticles: () => delay({ items: articles.map(({ body: _body, ...summary }) => summary), nextCursor: null }),
   getArticle: async (slug) => {
     const article = findArticle(slug);
@@ -96,6 +101,7 @@ export const localClient: ApiClient = {
     const evaluation: Evaluation = {
       id: crypto.randomUUID(), sessionId, problemId: problem.id, problemTitle: problem.title, createdAt: now, updatedAt: now,
       status: 'heuristic', provider: null, rubric: analyzeDesign(session.design, problem).rubric, assessments: [], debate: [], consensus: null,
+      judgeConfig: null,
       error: 'Modo offline: os juízes de IA rodam na API. Esta é apenas a pré-avaliação automática do seu desenho.',
     };
     state = { ...state, evaluations: [evaluation, ...state.evaluations] };
@@ -103,6 +109,14 @@ export const localClient: ApiClient = {
     return delay(evaluation);
   },
   listEvaluations: async (sessionId) => delay({ items: state.evaluations.filter((item) => !sessionId || item.sessionId === sessionId), nextCursor: null }),
+  getSettings: needsApi,
+  updateSettings: needsApi,
+  listProviderModels: needsApi,
+  testProvider: needsApi,
+  getHub: needsApi,
+  installPack: needsApi,
+  importPack: needsApi,
+  removePack: needsApi,
   getEvaluation: async (id) => {
     const evaluation = state.evaluations.find((item) => item.id === id);
     if (!evaluation) throw new Error('Avaliação não encontrada.');

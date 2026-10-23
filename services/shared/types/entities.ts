@@ -2,6 +2,21 @@ export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 export type Verdict = 'pass' | 'borderline' | 'fail';
 export type SessionStatus = 'in-progress' | 'submitted' | 'judged';
 
+export interface KeyPoint {
+  id: string;
+  /** What a strong answer must cover, phrased as a checkable statement. */
+  point: string;
+  /** Relative importance, 1 (nice to have) to 5 (essential). */
+  weight: number;
+}
+
+/** Where a problem or article came from: null for built-in content, otherwise the installed hub pack. */
+export interface ContentSource {
+  packId: string;
+  packName: string;
+  version: string;
+}
+
 export interface Problem {
   id: string;
   number: number;
@@ -22,6 +37,9 @@ export interface Problem {
   expectedKinds: ComponentKind[];
   hints: string[];
   relatedArticles: string[];
+  /** Grading key used by the AI judges; never shown before submission. */
+  keyPoints: KeyPoint[];
+  source: ContentSource | null;
 }
 
 export type ComponentKind =
@@ -133,10 +151,26 @@ export interface RubricReport {
 }
 
 export type JudgeId = 'rigor' | 'pragmatic';
+export type KeyPointCoverageLevel = 'full' | 'partial' | 'missing';
+
+export interface KeyPointCoverage {
+  id: string;
+  point: string;
+  weight: number;
+  coverage: KeyPointCoverageLevel;
+  evidence: string;
+}
 
 export interface JudgeAssessment {
   judge: JudgeId;
+  /** Final judge score: 60% key-point coverage + 40% holistic, or holistic alone when the problem has no key points. */
   score: number;
+  holisticScore?: number;
+  coverageScore?: number | null;
+  keyPoints?: KeyPointCoverage[];
+  /** provider/model that produced this assessment. */
+  model?: string;
+  samples?: number;
   verdict: Verdict;
   summary: string;
   strengths: string[];
@@ -153,6 +187,7 @@ export interface DebateTurn {
 }
 
 export interface Consensus {
+  model?: string;
   score: number;
   verdict: Verdict;
   summary: string;
@@ -172,6 +207,8 @@ export interface Evaluation {
   updatedAt: string;
   status: EvaluationStatus;
   provider: string | null;
+  /** provider/model used for each role when the evaluation ran. */
+  judgeConfig?: Record<JudgeRole, string> | null;
   error: string | null;
   rubric: RubricReport;
   assessments: JudgeAssessment[];
@@ -181,6 +218,7 @@ export interface Evaluation {
 
 export interface Article {
   slug: string;
+  source: ContentSource | null;
   title: string;
   category: string;
   summary: string;
@@ -205,4 +243,85 @@ export interface ErrorResponse {
     message: string;
     details: Record<string, unknown> | null;
   };
+}
+
+export type ProviderId = 'openai' | 'anthropic' | 'gemini' | 'xai' | 'ollama' | 'azure-openai';
+export type JudgeRole = 'rigor' | 'pragmatic' | 'moderator';
+
+export interface ProviderStatus {
+  id: ProviderId;
+  label: string;
+  configured: boolean;
+  /** Last characters of the stored key, for recognition only. */
+  keyHint: string | null;
+  baseUrl: string | null;
+  deployment: string | null;
+  /** Whether the credentials come from the settings page or from environment variables. */
+  source: 'settings' | 'env' | null;
+  needsKey: boolean;
+}
+
+export interface JudgeAssignment { provider: ProviderId | null; model: string | null }
+
+export interface PublicSettings {
+  providers: ProviderStatus[];
+  judges: Record<JudgeRole, JudgeAssignment>;
+  samples: 1 | 3;
+  hubUrl: string;
+  secretsEncrypted: boolean;
+}
+
+export interface ProviderUpdate { apiKey?: string | null; baseUrl?: string | null; deployment?: string | null }
+
+export interface SettingsUpdate {
+  providers?: Partial<Record<ProviderId, ProviderUpdate>>;
+  judges?: Partial<Record<JudgeRole, JudgeAssignment>>;
+  samples?: 1 | 3;
+  hubUrl?: string;
+}
+
+export interface PackManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  license: string;
+  homepage?: string;
+  tags: string[];
+}
+
+export type PackProblem = Omit<Problem, 'number' | 'source'>;
+export type PackArticle = Omit<Article, 'source'>;
+
+export interface PackBundle {
+  format: 'archon-pack@1';
+  manifest: PackManifest;
+  problems: PackProblem[];
+  articles: PackArticle[];
+}
+
+export interface HubPackEntry extends PackManifest {
+  problemCount: number;
+  articleCount: number;
+  /** Bundle location, absolute or relative to the index URL. */
+  bundle: string;
+  sha256: string;
+  size: number;
+}
+
+export interface HubIndex {
+  format: 'archon-hub@1';
+  name: string;
+  updatedAt: string;
+  packs: HubPackEntry[];
+}
+
+export interface InstalledPack {
+  manifest: PackManifest;
+  installedAt: string;
+  origin: 'hub' | 'import';
+  sha256: string | null;
+  problemCount: number;
+  articleCount: number;
 }

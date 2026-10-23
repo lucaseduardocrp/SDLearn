@@ -41,7 +41,7 @@ export function EvaluationPage() {
       <header className="page-header">
         <p className="eyebrow">// AVALIAÇÃO · {item.problemTitle.toUpperCase()}</p>
         <h1>{item.consensus ? <>Veredito: <span className={`verdict-text tone-${item.consensus.verdict}`}>{verdictLabel[item.consensus.verdict]}</span></> : evaluationStatusLabel[item.status]}</h1>
-        <p className="muted mono-small">{relativeTime(item.createdAt)}{item.provider ? ` · ${item.provider}` : ''}</p>
+        <p className="muted mono-small">{relativeTime(item.createdAt)}{item.judgeConfig ? ` · Rigoroso: ${item.judgeConfig.rigor} · Pragmático: ${item.judgeConfig.pragmatic} · Moderador: ${item.judgeConfig.moderator}` : item.provider ? ` · ${item.provider}` : ''}</p>
       </header>
 
       {running && <PhaseTracker status={item.status} />}
@@ -125,7 +125,29 @@ function JudgeCard({ assessment, debate }: { assessment: JudgeAssessment; debate
         <ScoreRing score={assessment.score} size={64} />
       </header>
       <div className="judge-verdict"><VerdictBadge verdict={assessment.verdict} />{debate && debate.revisedScore !== assessment.score && <span className="mono-dim">após debate: {debate.revisedScore}</span>}</div>
+      {assessment.holisticScore !== undefined && (
+        <p className="score-breakdown mono-small">
+          {assessment.coverageScore !== null && assessment.coverageScore !== undefined
+            ? <>gabarito <b>{assessment.coverageScore}</b> × 60% + visão geral <b>{assessment.holisticScore}</b> × 40% = <b>{assessment.score}</b></>
+            : <>visão geral <b>{assessment.holisticScore}</b></>}
+          {assessment.model && <span> · {assessment.model}{assessment.samples && assessment.samples > 1 ? ` · mediana de ${assessment.samples} amostras` : ''}</span>}
+        </p>
+      )}
       <p className="body-text">{assessment.summary}</p>
+      {assessment.keyPoints && assessment.keyPoints.length > 0 && (
+        <details className="keypoint-details">
+          <summary>Gabarito: {assessment.keyPoints.filter((point) => point.coverage === 'full').length} de {assessment.keyPoints.length} pontos cobertos</summary>
+          <ul className="keypoint-list">
+            {assessment.keyPoints.map((point) => (
+              <li key={point.id} className={`coverage-${point.coverage}`}>
+                <span className="coverage-badge">{point.coverage === 'full' ? 'coberto' : point.coverage === 'partial' ? 'parcial' : 'faltou'}</span>
+                <div><strong>{point.point}</strong><small>{point.evidence}</small></div>
+                <span className="mono-dim" title="Peso no gabarito">×{point.weight}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {assessment.dimensions.length > 0 && (
         <div className="dimension-bars">
           {assessment.dimensions.map((dimension) => (

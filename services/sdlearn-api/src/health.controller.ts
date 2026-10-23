@@ -12,7 +12,7 @@ export class HealthController {
   async getHealth(@Res({ passthrough: true }) response: Response): Promise<HealthResponse> {
     const databaseReady = await this.postgres.healthCheck();
     if (!databaseReady) response.status(503);
-    const judgeProvider = this.workbench.judgeProviderName;
+    const judgeProvider = databaseReady ? await this.workbench.judgeSummary().catch(() => null) : null;
     return {
       status: databaseReady ? 'ok' : 'degraded',
       services: {

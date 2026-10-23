@@ -13,7 +13,7 @@ import { api } from '../api';
 import { DifficultyBadge, ErrorState, PageLoading } from '../components/ui';
 import { formatDuration, padNumber } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
-import type { ChaosRequest, ChaosResult, ChaosRun, ComponentKind, Design, Evaluation, PracticeSession, Problem } from '../types';
+import type { ChaosRequest, ChaosResult, ChaosRun, ComponentKind, Design, Evaluation, PracticeSession, ProblemDetail } from '../types';
 import { CanvasEditor } from './CanvasEditor';
 import { ChaosPanel } from './ChaosPanel';
 import { decorateEdge, designWarnings, fromFlow, newComponentNode, newNoteNode, toFlow, type ComponentNodeData, type FlowEdge, type FlowNode } from './designModel';
@@ -21,7 +21,7 @@ import { Inspector } from './Inspector';
 import { JudgesPanel } from './JudgesPanel';
 import { MermaidPanel } from './MermaidPanel';
 
-interface WorkspaceData { session: PracticeSession; problem: Problem; runs: ChaosRun[]; evaluations: Evaluation[]; aiAvailable: boolean }
+interface WorkspaceData { session: PracticeSession; problem: ProblemDetail; runs: ChaosRun[]; evaluations: Evaluation[]; aiAvailable: boolean }
 
 export function WorkspacePage() {
   const { sessionId = '' } = useParams();
@@ -338,7 +338,7 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
   );
 }
 
-function Brief({ problem }: { problem: Problem }) {
+function Brief({ problem }: { problem: ProblemDetail }) {
   const [showHints, setShowHints] = useState(false);
   return (
     <div className="brief">

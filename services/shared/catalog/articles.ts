@@ -2,7 +2,7 @@ import type { Article } from '../types/entities';
 
 export const articleCategories = ['Fundamentos', 'Caching', 'Dados', 'Mensageria', 'Tempo real', 'Confiabilidade', 'Padrões'] as const;
 
-export const articles: Article[] = [
+const coreArticleData: Omit<Article, 'source'>[] = [
   {
     slug: 'back-of-envelope', title: 'Estimativas de guardanapo', category: 'Fundamentos', readingMinutes: 7,
     summary: 'Transforme DAU e retenção em RPS, armazenamento e banda antes de desenhar a primeira caixa.',
@@ -562,6 +562,5 @@ O Chaos Lab deste app aplica a mesma ideia ao seu desenho: derrube componentes, 
   },
 ];
 
-export function findArticle(slug: string): Article | undefined {
-  return articles.find((article) => article.slug === slug);
-}
+/** Built-in articles. Installed hub packs are merged on top of these by `buildCatalog`. */
+export const articles: Article[] = coreArticleData.map((article) => ({ ...article, source: null }));

@@ -62,3 +62,21 @@ export type SessionListQuery = z.infer<typeof sessionListQuerySchema>;
 export type SaveDesignRequest = z.infer<typeof saveDesignSchema>;
 export type ChaosRequestInput = z.infer<typeof chaosRequestSchema>;
 export type EvaluationListQuery = z.infer<typeof evaluationListQuerySchema>;
+
+const providerIds = ['openai', 'anthropic', 'gemini', 'xai', 'ollama', 'azure-openai'] as const;
+const providerUpdateSchema = z.object({
+  apiKey: z.string().trim().max(500).nullable().optional(),
+  baseUrl: z.union([z.string().trim().url().max(300), z.literal('')]).nullable().optional(),
+  deployment: z.string().trim().max(120).nullable().optional(),
+}).strict();
+const judgeAssignmentSchema = z.object({ provider: z.enum(providerIds).nullable(), model: z.string().trim().max(200).nullable() }).strict();
+export const settingsUpdateSchema = z.object({
+  providers: z.object(Object.fromEntries(providerIds.map((id) => [id, providerUpdateSchema.optional()])) as Record<(typeof providerIds)[number], z.ZodOptional<typeof providerUpdateSchema>>).strict().optional(),
+  judges: z.object({ rigor: judgeAssignmentSchema.optional(), pragmatic: judgeAssignmentSchema.optional(), moderator: judgeAssignmentSchema.optional() }).strict().optional(),
+  samples: z.union([z.literal(1), z.literal(3)]).optional(),
+  hubUrl: z.string().trim().max(500).optional(),
+}).strict();
+export const providerIdSchema = z.enum(providerIds);
+export const packIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(60);
+
+export type SettingsUpdateRequest = z.infer<typeof settingsUpdateSchema>;

@@ -1,6 +1,8 @@
 import { componentSpecs } from '../catalog/components';
 import type { CanvasEdge, CanvasNode, ComponentKind, Design } from '../types/entities';
 
+// Ordered from most to least specific: data and messaging names ("Jobs DB Postgres", "Due jobs queue")
+// must win over generic compute words such as "job" or "api".
 const keywordKinds: [RegExp, ComponentKind][] = [
   [/\b(client|user|users|browser|mobile|app|driver|rider|agent|host)s?\b/i, 'client'],
   [/\bdns\b/i, 'dns'],
@@ -8,9 +10,6 @@ const keywordKinds: [RegExp, ComponentKind][] = [
   [/load ?balancer|\blb\b|\belb\b|\balb\b|haproxy|nginx/i, 'load-balancer'],
   [/rate ?limit/i, 'rate-limiter'],
   [/gateway/i, 'api-gateway'],
-  [/websocket|\bws\b|socket|realtime|real-time|presence/i, 'websocket'],
-  [/cron|scheduler|frontier/i, 'scheduler'],
-  [/worker|consumer|processor|transcod|crawler|fetcher|job/i, 'worker'],
   [/cache|redis|memcache/i, 'cache'],
   [/kafka|kinesis|stream|pulsar|event log|\blog\b/i, 'stream'],
   [/queue|\bsqs\b|rabbit|\bmq\b/i, 'queue'],
@@ -20,6 +19,10 @@ const keywordKinds: [RegExp, ComponentKind][] = [
   [/cassandra|dynamo|mongo|nosql|bigtable|hbase|\bkv\b|key.?value|scylla|tsdb|time.?series/i, 'nosql'],
   [/\b(db|database|store)\b/i, 'sql'],
   [/external|stripe|twilio|sendgrid|apns|fcm|\bpsp\b|third.?party|provider/i, 'external'],
+  [/websocket|\bws\b|socket|realtime|real-time|presence/i, 'websocket'],
+  [/\bapi\b|\bservice\b|\bbackend\b/i, 'service'],
+  [/cron|scheduler|frontier/i, 'scheduler'],
+  [/worker|consumer|processor|transcod|crawler|fetcher|\bjobs?\b/i, 'worker'],
 ];
 
 export function inferKind(label: string, shapeHint?: ComponentKind): ComponentKind {

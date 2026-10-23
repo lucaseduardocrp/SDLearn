@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BookOpen, Clock, Lightbulb, Play } from 'lucide-react';
-import { articles } from '@shared/catalog/articles';
+import { ArrowLeft, ArrowRight, BookOpen, Clock, Gavel, Lightbulb, Package, Play } from 'lucide-react';
 import { api } from '../api';
 import { DifficultyBadge, ErrorState, PageLoading, TagChip, VerdictBadge } from '../components/ui';
 import { padNumber, relativeTime, sessionStatusLabel } from '../lib/format';
@@ -12,6 +11,7 @@ export function ProblemPage() {
   const navigate = useNavigate();
   const problem = useAsync(() => api.getProblem(problemId), [problemId]);
   const sessions = useAsync(() => api.listSessions(problemId), [problemId]);
+  const articleList = useAsync(() => api.listArticles(), []);
   const [showHints, setShowHints] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function ProblemPage() {
   if (problem.loading) return <PageLoading />;
   if (problem.error || !problem.data) return <div className="container page"><ErrorState message={problem.error ?? 'Problema não encontrado.'} onRetry={problem.reload} /></div>;
   const item = problem.data;
-  const related = articles.filter((article) => item.relatedArticles.includes(article.slug));
+  const related = (articleList.data?.items ?? []).filter((article) => item.relatedArticles.includes(article.slug));
 
   return (
     <div className="container page">
@@ -41,6 +41,7 @@ export function ProblemPage() {
           <span className="mono-dim">{padNumber(item.number)}</span>
           <DifficultyBadge difficulty={item.difficulty} />
           <span className="mono-dim"><Clock size={12} /> ~{item.estimatedMinutes} min</span>
+          {item.source && <span className="source-chip"><Package size={11} />{item.source.packName} {item.source.version}</span>}
         </div>
         <h1>{item.title}</h1>
         <p className="hero-lead">{item.summary}</p>
@@ -83,6 +84,7 @@ export function ProblemPage() {
             <p className="eyebrow">// PRONTO?</p>
             <h2>Abra o canvas</h2>
             <p className="muted">Desenhe a arquitetura, rode cenários de chaos e submeta aos juízes quando estiver pronto.</p>
+            {item.keyPointCount > 0 && <p className="muted small gabarito-note"><Gavel size={13} />Os juízes conferem {item.keyPointCount} pontos-chave do gabarito. Eles aparecem só no resultado da avaliação.</p>}
             <button className="btn btn-primary btn-block" onClick={() => void start()} disabled={starting}><Play size={15} />{starting ? 'Criando sessão…' : 'Começar novo design'}</button>
             {startError && <p className="form-error">{startError}</p>}
           </section>

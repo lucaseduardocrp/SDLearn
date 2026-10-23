@@ -1,0 +1,233 @@
+{
+  "format": "archon-pack@1",
+  "manifest": {
+    "id": "distributed-classics",
+    "name": "Distributed Classics",
+    "version": "1.0.0",
+    "description": "Two classic distributed-systems interview problems (job scheduler and collaborative editor) with articles on consensus and conflict-free replication.",
+    "author": "Archon community",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "consensus",
+      "scheduling",
+      "collaboration",
+      "crdt"
+    ]
+  },
+  "problems": [
+    {
+      "id": "collaborative-editor",
+      "title": "Collaborative Editor (Google Docs)",
+      "difficulty": "Hard",
+      "summary": "Let many people edit the same document at once without losing anyone's changes.",
+      "tags": [
+        "crdt",
+        "websockets",
+        "conflict resolution"
+      ],
+      "estimatedMinutes": 60,
+      "statement": "Design the real-time collaboration backend for a document editor. People open the same document from browsers around the world, type at the same time, see each other's cursors and keep working through flaky connections. When everyone stops typing, every copy of the document must be identical.",
+      "functionalRequirements": [
+        "Several users edit the same document concurrently and see each other's changes live",
+        "Show collaborators' cursors and presence",
+        "Work offline and merge changes on reconnect",
+        "Keep version history and allow restoring a version"
+      ],
+      "nonFunctionalRequirements": [
+        "Remote edits appear in under 200 ms for users in the same region",
+        "All replicas converge to the same document; no edit is silently lost",
+        "Up to 100 simultaneous editors per document",
+        "Documents are durable once the server acknowledges an edit"
+      ],
+      "scale": [
+        {
+          "label": "Documents",
+          "value": "1B"
+        },
+        {
+          "label": "Concurrent editors",
+          "value": "5M"
+        },
+        {
+          "label": "Peak operations",
+          "value": "200k / s"
+        }
+      ],
+      "peakRps": 200000,
+      "latencyBudgetMs": 200,
+      "expectedKinds": [
+        "client",
+        "load-balancer",
+        "websocket",
+        "service",
+        "nosql",
+        "cache",
+        "object-storage"
+      ],
+      "hints": [
+        "Route every editor of a document to the same session server so ordering is decided in one place.",
+        "Compare operational transformation (OT) with CRDTs for convergence and offline support.",
+        "Keep an append-only operation log and take periodic snapshots."
+      ],
+      "relatedArticles": [
+        "crdt-and-ot",
+        "realtime",
+        "replication-consistency"
+      ],
+      "keyPoints": [
+        {
+          "id": "convergence",
+          "point": "Chooses OT or a CRDT and explains how concurrent edits converge without losing changes.",
+          "weight": 5
+        },
+        {
+          "id": "realtime-channel",
+          "point": "Uses persistent connections (WebSocket) to broadcast operations to collaborators.",
+          "weight": 4
+        },
+        {
+          "id": "document-affinity",
+          "point": "Routes all editors of a document to the same session server (consistent hashing / directory) or explains how ordering works without it.",
+          "weight": 4
+        },
+        {
+          "id": "op-log",
+          "point": "Persists an append-only operation log plus periodic snapshots for durability, history and fast loading.",
+          "weight": 4
+        },
+        {
+          "id": "offline",
+          "point": "Supports offline edits that merge on reconnect.",
+          "weight": 3
+        },
+        {
+          "id": "presence",
+          "point": "Handles cursors and presence as ephemeral, best-effort state.",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "job-scheduler",
+      "title": "Distributed Job Scheduler",
+      "difficulty": "Hard",
+      "summary": "Run millions of scheduled and recurring jobs exactly when they are due.",
+      "tags": [
+        "scheduling",
+        "leases",
+        "queues"
+      ],
+      "estimatedMinutes": 60,
+      "statement": "A platform team needs a shared scheduler. Product services register jobs (\"send this reminder at 09:00\", \"rebuild this report every hour\") through an API. The scheduler must start each job on time on a fleet of workers, survive node failures, and never run the same execution on two workers at once.",
+      "functionalRequirements": [
+        "Schedule one-off jobs at a timestamp and recurring jobs with cron expressions",
+        "Execute each job on a worker fleet and record the result",
+        "Retry failed jobs with backoff and a maximum attempt count",
+        "Cancel or pause jobs and query their history"
+      ],
+      "nonFunctionalRequirements": [
+        "A due job starts within 2 seconds of its scheduled time",
+        "Each run executes at least once and is not run concurrently by two workers",
+        "Scheduler nodes can crash without losing or duplicating schedules",
+        "Scales to 10 million scheduled jobs and 50k executions per second at peak"
+      ],
+      "scale": [
+        {
+          "label": "Scheduled jobs",
+          "value": "10M"
+        },
+        {
+          "label": "Peak executions",
+          "value": "50k / s"
+        },
+        {
+          "label": "Workers",
+          "value": "~2000"
+        }
+      ],
+      "peakRps": 50000,
+      "latencyBudgetMs": 2000,
+      "expectedKinds": [
+        "client",
+        "service",
+        "scheduler",
+        "sql",
+        "queue",
+        "worker"
+      ],
+      "hints": [
+        "Partition the time wheel or the due-jobs index so many scheduler nodes share the work.",
+        "A worker should hold a lease with a deadline; an expired lease makes the run eligible again.",
+        "Idempotent job handlers turn at-least-once delivery into effectively-once execution."
+      ],
+      "relatedArticles": [
+        "consensus-and-leases",
+        "message-queues",
+        "idempotency"
+      ],
+      "keyPoints": [
+        {
+          "id": "due-index",
+          "point": "Stores schedules in a durable store indexed by next run time and partitions that index across scheduler nodes.",
+          "weight": 5
+        },
+        {
+          "id": "dispatch-queue",
+          "point": "Separates scheduling from execution by pushing due jobs to a queue consumed by a worker pool.",
+          "weight": 4
+        },
+        {
+          "id": "leases",
+          "point": "Prevents concurrent execution of the same run with leases/locks that expire (fencing tokens or conditional updates).",
+          "weight": 5
+        },
+        {
+          "id": "retries",
+          "point": "Retries with backoff, caps attempts and moves exhausted jobs to a dead-letter state.",
+          "weight": 3
+        },
+        {
+          "id": "idempotency",
+          "point": "Requires idempotent job handlers or run ids so at-least-once delivery is safe.",
+          "weight": 4
+        },
+        {
+          "id": "recurring",
+          "point": "Computes the next occurrence of recurring jobs atomically when a run is dispatched.",
+          "weight": 3
+        },
+        {
+          "id": "failover",
+          "point": "Reassigns partitions when a scheduler node dies (leader election / consensus / lease-based ownership).",
+          "weight": 4
+        }
+      ]
+    }
+  ],
+  "articles": [
+    {
+      "slug": "consensus-and-leases",
+      "title": "Consenso, eleição de líder e leases",
+      "category": "Confiabilidade",
+      "summary": "Como vários nós concordam sobre quem manda — Raft, quóruns, leases e fencing tokens.",
+      "readingMinutes": 8,
+      "body": "Muitos sistemas precisam que **exatamente um** nó faça algo: o líder de uma partição, o dono de um job, o primário de um banco. Em uma rede que perde mensagens e nós que pausam, isso exige consenso.\n\n## Raft em uma página\n\n- Cada nó é **seguidor**, **candidato** ou **líder**.\n- Sem heartbeat do líder, um seguidor vira candidato e pede votos. Quem recebe a **maioria** vira líder daquele **termo**.\n- O líder replica um log; uma entrada está **confirmada** quando a maioria a gravou.\n- Com 5 nós, o cluster tolera 2 falhas. Com 2 nós, não tolera nenhuma: use números ímpares.\n\nNa prática você raramente implementa Raft: usa etcd, ZooKeeper ou Consul, ou um banco que já resolve isso internamente.\n\n## Leases\n\nUm **lease** é uma posse com prazo: \"o worker 7 é dono do job 42 até 10:00:30\". Se o worker morrer, o lease expira e outro assume. Renove antes de expirar.\n\nO perigo: o worker 7 pausa (GC, rede) e continua achando que é dono depois que o lease expirou. Dois donos ao mesmo tempo.\n\n## Fencing tokens\n\nCada novo lease recebe um número crescente. Todo efeito colateral envia o token, e o recurso rejeita tokens menores que o último visto. O dono \"zumbi\" com o token 33 é recusado porque o novo dono já escreveu com o 34.\n\n## Na entrevista\n\n- Diga quem decide a posse (serviço de coordenação ou update condicional no banco).\n- Diga o que acontece quando o dono some (expiração) e quando ele volta (fencing).\n- Lembre que consenso custa latência: use-o para metadados e posse, não em cada requisição.",
+      "relatedProblems": [
+        "job-scheduler",
+        "distributed-cache"
+      ]
+    },
+    {
+      "slug": "crdt-and-ot",
+      "title": "CRDTs e Operational Transformation",
+      "category": "Tempo real",
+      "summary": "As duas famílias de algoritmos que fazem edições concorrentes convergirem.",
+      "readingMinutes": 7,
+      "body": "Ana apaga a palavra 3 enquanto Bruno insere texto na posição 10. Se cada um aplicar a operação do outro \"como veio\", os documentos divergem. Dois caminhos resolvem isso.\n\n## Operational Transformation (OT)\n\nUm servidor central ordena as operações. Antes de aplicar uma operação concorrente, ela é **transformada** contra as que vieram antes (\"a inserção na posição 10 vira posição 4, porque 6 caracteres foram apagados antes dela\").\n\n- Funciona muito bem com um servidor por documento (o Google Docs usa essa ideia).\n- As funções de transformação são difíceis de acertar e de provar corretas.\n- Edição offline longa é complicada: muitas operações para transformar.\n\n## CRDTs\n\nEstruturas de dados desenhadas para que **qualquer ordem** de aplicação produza o mesmo resultado. Cada caractere ganha um identificador único e ordenável; inserir e apagar viram operações comutativas.\n\n- Não precisam de servidor central para ordenar: ótimo para offline e peer-to-peer.\n- Custam mais memória (metadados por caractere) e exigem coleta de lixo das lápides (tombstones).\n- Bibliotecas maduras: Yjs, Automerge.\n\n## Arquitetura comum\n\n1. Clientes se conectam por WebSocket ao servidor de sessão do documento.\n2. O servidor valida, ordena (OT) ou apenas retransmite (CRDT) as operações.\n3. Um log de operações é persistido; snapshots periódicos aceleram a abertura.\n4. Presença e cursores trafegam no mesmo canal, mas são efêmeros.\n\n## Como escolher\n\nOT quando há um servidor autoritativo e edição majoritariamente online. CRDT quando offline e múltiplas réplicas são requisitos centrais.",
+      "relatedProblems": [
+        "collaborative-editor",
+        "file-sync"
+      ]
+    }
+  ]
+}

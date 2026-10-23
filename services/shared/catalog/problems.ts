@@ -1,6 +1,7 @@
 import type { Problem } from '../types/entities';
+import { coreKeyPoints } from './key-points';
 
-export const problems: Problem[] = [
+const coreProblemData: Omit<Problem, 'keyPoints' | 'source'>[] = [
   {
     id: 'url-shortener', number: 1, title: 'URL Shortener', difficulty: 'Easy', estimatedMinutes: 35,
     summary: 'Design a service like bit.ly that turns long URLs into short aliases.',
@@ -211,6 +212,5 @@ export const problems: Problem[] = [
   },
 ];
 
-export function findProblem(id: string): Problem | undefined {
-  return problems.find((problem) => problem.id === id);
-}
+/** Built-in problems. Installed hub packs are merged on top of these by `buildCatalog`. */
+export const problems: Problem[] = coreProblemData.map((problem) => ({ ...problem, keyPoints: coreKeyPoints[problem.id] ?? [], source: null }));

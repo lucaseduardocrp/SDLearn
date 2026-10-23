@@ -1,0 +1,26 @@
+{
+  "format": "archon-hub@1",
+  "name": "Archon Community Hub",
+  "updatedAt": "2026-10-23T00:10:56.685Z",
+  "packs": [
+    {
+      "id": "distributed-classics",
+      "name": "Distributed Classics",
+      "version": "1.0.0",
+      "description": "Two classic distributed-systems interview problems (job scheduler and collaborative editor) with articles on consensus and conflict-free replication.",
+      "author": "Archon community",
+      "license": "CC-BY-4.0",
+      "tags": [
+        "consensus",
+        "scheduling",
+        "collaboration",
+        "crdt"
+      ],
+      "problemCount": 2,
+      "articleCount": 2,
+      "bundle": "packs/distributed-classics-1.0.0.json",
+      "sha256": "7e7960e85bfeb522c391cb1b2c134920b282ae8f96d902b5dd5874d68a458832",
+      "size": 11441
+    }
+  ]
+}

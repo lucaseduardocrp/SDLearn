@@ -31,7 +31,7 @@ export function JudgesPanel({ evaluations, componentCount, notesLength, chaosRun
       <ul className="submit-checklist">
         {checklist.map((item) => <li key={item.text} className={item.done ? 'done' : ''}>{item.text}</li>)}
       </ul>
-      {!aiAvailable && <p className="hint-box">Sem provedor de IA configurado: você recebe a pré-avaliação automática. Configure <code>OPENAI_API_KEY</code> ou Azure OpenAI na API para ativar os juízes.</p>}
+      {!aiAvailable && <p className="hint-box">Sem provedor de IA configurado: você recebe a pré-avaliação automática. Conecte OpenAI, Anthropic, Gemini, Grok ou Ollama em <Link to="/settings">Configurações</Link> para ativar os juízes.</p>}
       <button className="btn btn-primary btn-block" onClick={onSubmit} disabled={submitting}><Send size={15} />{submitting ? 'Enviando…' : 'Submeter aos juízes'}</button>
       {error && <p className="form-error">{error}</p>}
 
