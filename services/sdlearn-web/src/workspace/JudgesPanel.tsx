@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, Gavel, Scale, Send } from 'lucide-react';
 import type { Evaluation } from '../types';
-import { evaluationStatusLabel, isRunning, relativeTime, scoreTone } from '../lib/format';
-import { VerdictBadge } from '../components/ui';
+import { useI18n } from '../i18n';
+import { isRunning, relativeTime, scoreTone } from '../lib/format';
+import { Button, VerdictBadge } from '../components/ui';
 
 interface JudgesPanelProps {
   evaluations: Evaluation[];
@@ -16,28 +17,29 @@ interface JudgesPanelProps {
 }
 
 export function JudgesPanel({ evaluations, componentCount, notesLength, chaosRunCount, submitting, error, aiAvailable, onSubmit }: JudgesPanelProps) {
+  const { t } = useI18n();
   const checklist = [
-    { done: componentCount >= 4, text: `${componentCount} componentes no canvas` },
-    { done: notesLength >= 200, text: notesLength ? `${notesLength} caracteres de notas e trade-offs` : 'Nenhuma nota de trade-off ainda' },
-    { done: chaosRunCount > 0, text: chaosRunCount ? `${chaosRunCount} experimentos de chaos` : 'Nenhum experimento de chaos' },
+    { done: componentCount >= 4, text: t.judgesPanel.components(componentCount) },
+    { done: notesLength >= 200, text: notesLength ? t.judgesPanel.notes(notesLength) : t.judgesPanel.noNotes },
+    { done: chaosRunCount > 0, text: chaosRunCount ? t.judgesPanel.experiments(chaosRunCount) : t.judgesPanel.noExperiments },
   ];
   return (
     <div className="judges-panel">
       <div className="judge-intro">
-        <div><Gavel size={16} /><span><strong>O Rigoroso</strong><small>corretude, falhas, garantias</small></span></div>
-        <div><Scale size={16} /><span><strong>O Pragmático</strong><small>simplicidade, custo, escopo</small></span></div>
+        <div><Gavel size={16} /><span><strong>{t.judges.rigor.name}</strong><small>{t.judges.rigor.focus}</small></span></div>
+        <div><Scale size={16} /><span><strong>{t.judges.pragmatic.name}</strong><small>{t.judges.pragmatic.focus}</small></span></div>
       </div>
-      <p className="muted small">Os dois juízes avaliam de forma independente (0–100), debatem as diferenças e chegam a um veredito de consenso: <b>pass</b> ≥ 75, <b>borderline</b> 55–74, <b>fail</b> &lt; 55.</p>
+      <p className="muted small">{t.judgesPanel.intro(t.verdict.pass, t.verdict.borderline, t.verdict.fail)}</p>
       <ul className="submit-checklist">
         {checklist.map((item) => <li key={item.text} className={item.done ? 'done' : ''}>{item.text}</li>)}
       </ul>
-      {!aiAvailable && <p className="hint-box">Sem provedor de IA configurado: você recebe a pré-avaliação automática. Conecte OpenAI, Anthropic, Gemini, Grok ou Ollama em <Link to="/settings">Configurações</Link> para ativar os juízes.</p>}
-      <button className="btn btn-primary btn-block" onClick={onSubmit} disabled={submitting}><Send size={15} />{submitting ? 'Enviando…' : 'Submeter aos juízes'}</button>
+      {!aiAvailable && <p className="hint-box">{t.judgesPanel.noAi(<Link to="/settings">{t.judgesPanel.settings}</Link>)}</p>}
+      <Button variant="primary" block onClick={onSubmit} disabled={submitting}><Send size={15} />{submitting ? t.judgesPanel.submitting : t.judgesPanel.submit}</Button>
       {error && <p className="form-error">{error}</p>}
 
       {evaluations.length > 0 && (
         <div className="run-history">
-          <span className="panel-label">Avaliações ({evaluations.length})</span>
+          <span className="panel-label">{t.judgesPanel.evaluations(evaluations.length)}</span>
           <ul>
             {evaluations.map((evaluation) => {
               const score = evaluation.consensus?.score ?? null;
@@ -45,7 +47,7 @@ export function JudgesPanel({ evaluations, componentCount, notesLength, chaosRun
                 <li key={evaluation.id}>
                   <Link to={`/evaluations/${evaluation.id}`}>
                     <span className={`eval-score tone-${scoreTone(score)}`}>{score ?? (evaluation.status === 'heuristic' ? evaluation.rubric.score : '—')}</span>
-                    <span><strong>{evaluationStatusLabel[evaluation.status]}{isRunning(evaluation.status) ? '…' : ''}</strong><small>{relativeTime(evaluation.createdAt)}</small></span>
+                    <span><strong>{t.evaluationStatus[evaluation.status]}{isRunning(evaluation.status) ? '…' : ''}</strong><small>{relativeTime(evaluation.createdAt)}</small></span>
                     {evaluation.consensus ? <VerdictBadge verdict={evaluation.consensus.verdict} /> : <ArrowRight size={14} />}
                   </Link>
                 </li>

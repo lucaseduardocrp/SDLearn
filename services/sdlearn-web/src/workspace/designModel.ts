@@ -1,5 +1,6 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 import { componentSpecs } from '@shared/catalog/components';
+import type { Messages } from '../i18n';
 import type { CanvasEdge, CanvasNode, ComponentKind, Design } from '../types';
 
 export type ComponentNodeData = { kind: ComponentKind; label: string; replicas: number; notes?: string };
@@ -56,7 +57,7 @@ export function newNoteNode(position: { x: number; y: number }): NoteFlowNode {
 export interface DesignWarning { id: string; text: string; nodeId?: string; edgeId?: string }
 
 /** Cheap structural hints that help users read their own diagram. */
-export function designWarnings(nodes: FlowNode[], edges: FlowEdge[]): DesignWarning[] {
+export function designWarnings(nodes: FlowNode[], edges: FlowEdge[], text: Messages['workspace']['warnings']): DesignWarning[] {
   const warnings: DesignWarning[] = [];
   const components = nodes.filter((node): node is ComponentFlowNode => node.type === 'component');
   const byId = new Map(components.map((node) => [node.id, node]));
@@ -64,17 +65,17 @@ export function designWarnings(nodes: FlowNode[], edges: FlowEdge[]): DesignWarn
     const target = byId.get(edge.target);
     const source = byId.get(edge.source);
     if (target?.data.kind === 'client' && source && source.data.kind !== 'client') {
-      warnings.push({ id: `into-client-${edge.id}`, edgeId: edge.id, text: `${source.data.label} → ${target.data.label}: a seta aponta para o cliente. As setas indicam quem chama quem; normalmente o fluxo começa no Client.` });
+      warnings.push({ id: `into-client-${edge.id}`, edgeId: edge.id, text: text.intoClient(source.data.label, target.data.label) });
     }
   }
   for (const client of components.filter((node) => node.data.kind === 'client')) {
     if (components.length > 1 && !edges.some((edge) => edge.source === client.id)) {
-      warnings.push({ id: `idle-client-${client.id}`, nodeId: client.id, text: `${client.data.label} não chama nenhum componente. Arraste da bolinha à direita dele até o primeiro componente.` });
+      warnings.push({ id: `idle-client-${client.id}`, nodeId: client.id, text: text.idleClient(client.data.label) });
     }
   }
   const connected = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
   for (const node of components) {
-    if (components.length > 1 && !connected.has(node.id)) warnings.push({ id: `isolated-${node.id}`, nodeId: node.id, text: `${node.data.label} está solto: nenhuma conexão entra ou sai dele.` });
+    if (components.length > 1 && !connected.has(node.id)) warnings.push({ id: `isolated-${node.id}`, nodeId: node.id, text: text.isolated(node.data.label) });
   }
   return warnings;
 }

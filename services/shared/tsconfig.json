@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["types/**/*.ts", "schemas/**/*.ts", "catalog/**/*.ts", "engine/**/*.ts", "content/**/*.ts"]
+  "include": ["types/**/*.ts", "i18n/**/*.ts", "schemas/**/*.ts", "catalog/**/*.ts", "engine/**/*.ts", "content/**/*.ts"]
 }

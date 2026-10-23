@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Injectable } from '@nestjs/common';
+import { defaultLocale, localized, type Locale, type Localized } from '../../../shared/i18n/locale';
 import { formatZodIssues, hubIndexSchema, packBundleSchema } from '../../../shared/schemas/content';
 import type { HubIndex, HubPackEntry, InstalledPack, PackBundle } from '../../../shared/types/entities';
-import { AppError, notFound } from '../errors/app-error';
+import { AppError, errorMessage, notFound } from '../errors/app-error';
 import { SettingsService } from '../settings/settings.service';
 import { ContentService } from './content.service';
 
@@ -31,7 +32,7 @@ export function compareVersions(a: string, b: string): number {
 function toUrl(location: string): URL {
   if (/^https?:\/\//i.test(location) || location.startsWith('file:')) return new URL(location);
   if (isAbsolute(location)) return pathToFileURL(location);
-  throw new AppError(422, 'VALIDATION_ERROR', 'The hub address must be an http(s) URL or an absolute file path.');
+  throw new AppError(422, 'VALIDATION_ERROR', localized('O endereço do hub precisa ser uma URL http(s) ou um caminho absoluto de arquivo.', 'The hub address must be an http(s) URL or an absolute file path.'));
 }
 
 async function download(url: URL): Promise<Buffer> {
@@ -39,28 +40,32 @@ async function download(url: URL): Promise<Buffer> {
     try {
       return await readFile(fileURLToPath(url));
     } catch {
-      throw new AppError(503, 'SERVICE_UNAVAILABLE', `Hub file not found: ${fileURLToPath(url)}. Run "npm run hub:build" or point the hub to a published index.`);
+      throw new AppError(503, 'SERVICE_UNAVAILABLE', localized(
+        `Arquivo do hub não encontrado: ${fileURLToPath(url)}. Rode "npm run hub:build" ou aponte o hub para um índice publicado.`,
+        `Hub file not found: ${fileURLToPath(url)}. Run "npm run hub:build" or point the hub to a published index.`,
+      ));
     }
   }
   let response: Response;
   try {
     response = await fetch(url, { signal: AbortSignal.timeout(20_000), headers: { Accept: 'application/json' } });
   } catch {
-    throw new AppError(503, 'SERVICE_UNAVAILABLE', `Could not reach the hub at ${url.host}.`);
+    throw new AppError(503, 'SERVICE_UNAVAILABLE', localized(`Não foi possível acessar o hub em ${url.host}.`, `Could not reach the hub at ${url.host}.`));
   }
-  if (!response.ok) throw new AppError(503, 'SERVICE_UNAVAILABLE', `The hub answered HTTP ${response.status} for ${url.pathname}.`);
+  if (!response.ok) throw new AppError(503, 'SERVICE_UNAVAILABLE', localized(`O hub respondeu HTTP ${response.status} para ${url.pathname}.`, `The hub answered HTTP ${response.status} for ${url.pathname}.`));
   const declared = Number(response.headers.get('content-length') ?? 0);
-  if (declared > MAX_DOWNLOAD_BYTES) throw new AppError(422, 'VALIDATION_ERROR', 'The hub file is larger than 5 MB.');
+  const tooLarge = localized('O arquivo do hub tem mais de 5 MB.', 'The hub file is larger than 5 MB.');
+  if (declared > MAX_DOWNLOAD_BYTES) throw new AppError(422, 'VALIDATION_ERROR', tooLarge);
   const body = Buffer.from(await response.arrayBuffer());
-  if (body.length > MAX_DOWNLOAD_BYTES) throw new AppError(422, 'VALIDATION_ERROR', 'The hub file is larger than 5 MB.');
+  if (body.length > MAX_DOWNLOAD_BYTES) throw new AppError(422, 'VALIDATION_ERROR', tooLarge);
   return body;
 }
 
-function parseJson(buffer: Buffer, what: string): unknown {
+function parseJson(buffer: Buffer, what: Localized): unknown {
   try {
     return JSON.parse(buffer.toString('utf8'));
   } catch {
-    throw new AppError(422, 'VALIDATION_ERROR', `${what} is not valid JSON.`);
+    throw new AppError(422, 'VALIDATION_ERROR', localized(`${what['pt-BR']} não é um JSON válido.`, `${what.en} is not valid JSON.`));
   }
 }
 
@@ -68,7 +73,7 @@ function parseJson(buffer: Buffer, what: string): unknown {
 export class HubService {
   constructor(private readonly settings: SettingsService, private readonly content: ContentService) {}
 
-  async listing(): Promise<HubListing> {
+  async listing(locale: Locale = defaultLocale): Promise<HubListing> {
     const source = (await this.settings.getPublic()).hubUrl;
     const installed = await this.content.listInstalled();
     try {
@@ -80,7 +85,7 @@ export class HubService {
       });
       return { source, name: index.name, error: null, packs, installed };
     } catch (error) {
-      return { source, name: null, error: error instanceof Error ? error.message : String(error), packs: [], installed };
+      return { source, name: null, error: errorMessage(error, locale), packs: [], installed };
     }
   }
 
@@ -92,9 +97,12 @@ export class HubService {
     const bundleUrl = new URL(entry.bundle, toUrl(source));
     const raw = await download(bundleUrl);
     const digest = createHash('sha256').update(raw).digest('hex');
-    if (digest !== entry.sha256) throw new AppError(422, 'VALIDATION_ERROR', 'The downloaded pack does not match the checksum published by the hub. Installation was cancelled.');
-    const bundle = this.validate(parseJson(raw, 'The pack'));
-    if (bundle.manifest.id !== entry.id) throw new AppError(422, 'VALIDATION_ERROR', `The hub lists '${entry.id}' but the file contains '${bundle.manifest.id}'.`);
+    if (digest !== entry.sha256) throw new AppError(422, 'VALIDATION_ERROR', localized(
+      'O pacote baixado não confere com o checksum publicado pelo hub. A instalação foi cancelada.',
+      'The downloaded pack does not match the checksum published by the hub. Installation was cancelled.',
+    ));
+    const bundle = this.validate(parseJson(raw, localized('O pacote', 'The pack')));
+    if (bundle.manifest.id !== entry.id) throw new AppError(422, 'VALIDATION_ERROR', localized(`O hub lista '${entry.id}', mas o arquivo contém '${bundle.manifest.id}'.`, `The hub lists '${entry.id}' but the file contains '${bundle.manifest.id}'.`));
     return this.content.install(bundle, 'hub', digest);
   }
 
@@ -107,13 +115,16 @@ export class HubService {
 
   private validate(raw: unknown): PackBundle {
     const result = packBundleSchema.safeParse(raw);
-    if (!result.success) throw new AppError(422, 'VALIDATION_ERROR', 'The pack is invalid.', { issues: formatZodIssues(result.error).slice(0, 20) });
+    if (!result.success) throw new AppError(422, 'VALIDATION_ERROR', localized('O pacote é inválido.', 'The pack is invalid.'), { issues: formatZodIssues(result.error).slice(0, 20) });
     return result.data as PackBundle;
   }
 
   private async fetchIndex(location: string): Promise<HubIndex> {
-    const result = hubIndexSchema.safeParse(parseJson(await download(toUrl(location)), 'The hub index'));
-    if (!result.success) throw new AppError(422, 'VALIDATION_ERROR', `The hub index is invalid: ${formatZodIssues(result.error).slice(0, 3).join('; ')}`);
+    const result = hubIndexSchema.safeParse(parseJson(await download(toUrl(location)), localized('O índice do hub', 'The hub index')));
+    if (!result.success) {
+      const issues = formatZodIssues(result.error).slice(0, 3).join('; ');
+      throw new AppError(422, 'VALIDATION_ERROR', localized(`O índice do hub é inválido: ${issues}`, `The hub index is invalid: ${issues}`));
+    }
     return result.data as HubIndex;
   }
 }

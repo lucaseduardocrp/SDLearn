@@ -3,6 +3,7 @@ import type {
   ArticleResponse, ArticleSummary, ChaosRun, ChaosRunResponse, ChaosScenarioResponse, CollectionResponse, Evaluation,
   EvaluationResponse, HealthResponse, ProblemResponse, ProblemSummary, SessionResponse, SessionSummary,
 } from '../types';
+import { getLocale, getMessages } from '../i18n';
 import type { ApiClient, HubListing, ProviderTestResult } from './types';
 
 /** Fired after settings are saved so indicators such as the top bar can refresh. */
@@ -19,12 +20,12 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${apiBase}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } });
+    response = await fetch(`${apiBase}${path}`, { ...init, headers: { 'Content-Type': 'application/json', 'Accept-Language': getLocale(), ...init?.headers } });
   } catch {
-    throw new ApiError('Não foi possível falar com a API. Ela está rodando? (npm run dev:api)', 0);
+    throw new ApiError(getMessages().api.unreachable, 0);
   }
   if (!response.ok) {
-    let message = `A requisição falhou com status ${response.status}.`;
+    let message = getMessages().api.requestFailed(response.status);
     let details: Record<string, unknown> | null = null;
     try {
       const body = await response.json() as { error?: { message?: string; details?: Record<string, unknown> | null } };

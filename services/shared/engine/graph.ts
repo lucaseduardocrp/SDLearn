@@ -1,5 +1,7 @@
 import { componentSpecs } from '../catalog/components';
 import type { CanvasEdge, CanvasNode, ComponentKind, Design } from '../types/entities';
+import { engineMessages } from '../i18n/engine';
+import type { Locale } from '../i18n/locale';
 
 // Ordered from most to least specific: data and messaging names ("Jobs DB Postgres", "Due jobs queue")
 // must win over generic compute words such as "job" or "api".
@@ -78,9 +80,9 @@ function mermaidLabel(text: string): string {
   return `"${text.replace(/"/g, '#quot;').replace(/[\r\n]+/g, ' ')}"`;
 }
 
-export function designToMermaid(design: Pick<Design, 'nodes' | 'edges'>): string {
+export function designToMermaid(design: Pick<Design, 'nodes' | 'edges'>, locale?: Locale): string {
   const components = design.nodes.filter((node) => node.type === 'component');
-  if (components.length === 0) return 'flowchart LR\n  %% Adicione componentes no canvas';
+  if (components.length === 0) return `flowchart LR\n  %% ${engineMessages(locale).mermaid.emptyCanvas}`;
   const ids = new Map<string, string>();
   const used = new Set<string>();
   components.forEach((node, index) => {
@@ -138,7 +140,8 @@ function parseShape(raw: string | undefined): { label: string | null; hint?: Com
 
 export interface MermaidImport { nodes: CanvasNode[]; edges: CanvasEdge[]; warnings: string[] }
 
-export function mermaidToDesign(source: string): MermaidImport {
+export function mermaidToDesign(source: string, locale?: Locale): MermaidImport {
+  const text = engineMessages(locale).mermaid;
   const parsed = new Map<string, ParsedNode>();
   const edges: { source: string; target: string; label?: string; async: boolean }[] = [];
   const warnings: string[] = [];
@@ -167,19 +170,19 @@ export function mermaidToDesign(source: string): MermaidImport {
     const line = rawLine.trim();
     if (!line || SKIP.test(line)) return;
     let current = readNodes(line, 0);
-    if (!current) { warnings.push(`Linha ${index + 1} ignorada: ${line}`); return; }
+    if (!current) { warnings.push(text.lineIgnored(index + 1, line)); return; }
     for (;;) {
       ARROW.lastIndex = current.end;
       const arrow = ARROW.exec(line);
       if (!arrow) break;
       const next = readNodes(line, ARROW.lastIndex);
-      if (!next) { warnings.push(`Linha ${index + 1}: conexão sem destino.`); break; }
+      if (!next) { warnings.push(text.edgeWithoutTarget(index + 1)); break; }
       const label = (arrow[4] ?? arrow[2])?.trim() || undefined;
       const async = arrow[3].includes('.');
       for (const from of current.ids) for (const to of next.ids) edges.push({ source: from, target: to, label, async });
       current = next;
     }
-    if (current.end < line.trim().length && !/^\s*$/.test(line.slice(current.end))) warnings.push(`Linha ${index + 1}: trecho não reconhecido "${line.slice(current.end).trim()}".`);
+    if (current.end < line.trim().length && !/^\s*$/.test(line.slice(current.end))) warnings.push(text.unrecognized(index + 1, line.slice(current.end).trim()));
   });
 
   const nodes: CanvasNode[] = [];

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { buildCatalog, type Catalog } from '../../../shared/catalog/catalog';
+import { localized } from '../../../shared/i18n/locale';
 import type { InstalledPack, PackBundle, PracticeSession } from '../../../shared/types/entities';
 import { AppError, notFound } from '../errors/app-error';
 import { RecordStore } from '../persistence/record-store';
@@ -25,7 +26,10 @@ export class ContentService {
     const problem = (await this.catalog()).findProblem(id);
     if (problem) return problem;
     const packId = id.includes('.') ? id.split('.')[0] : null;
-    if (packId) throw new AppError(404, 'NOT_FOUND', `Problem '${id}' belongs to the pack '${packId}', which is not installed. Install it again from the hub to open this session.`);
+    if (packId) throw new AppError(404, 'NOT_FOUND', localized(
+      `O problema '${id}' pertence ao pacote '${packId}', que não está instalado. Instale-o de novo pelo hub para abrir esta sessão.`,
+      `Problem '${id}' belongs to the pack '${packId}', which is not installed. Install it again from the hub to open this session.`,
+    ));
     throw notFound('Problem', id);
   }
 
@@ -57,7 +61,10 @@ export class ContentService {
     if (!pack) throw notFound('Pack', packId);
     const sessions = (await this.store.list<PracticeSession>('session')).filter((session) => session.problemId.startsWith(`${packId}.`));
     if (sessions.length && !force) {
-      throw new AppError(409, 'CONFLICT', `${sessions.length} session(s) use problems from this pack. Remove anyway? Those sessions stay saved but cannot be opened until the pack is installed again.`, { sessions: sessions.length });
+      throw new AppError(409, 'CONFLICT', localized(
+        `${sessions.length} sessão(ões) usam problemas deste pacote. Remover mesmo assim? Elas continuam salvas, mas só abrem quando o pacote for instalado de novo.`,
+        `${sessions.length} session(s) use problems from this pack. Remove anyway? Those sessions stay saved but cannot be opened until the pack is installed again.`,
+      ), { sessions: sessions.length });
     }
     await this.store.remove('pack', packId);
     this.cached = null;

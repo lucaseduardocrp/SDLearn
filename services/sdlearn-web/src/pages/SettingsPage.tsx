@@ -1,48 +1,51 @@
 import { useEffect, useState } from 'react';
 import { Check, CircleCheck, CircleX, Gavel, KeyRound, LoaderCircle, RefreshCw, Save, Scale, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '../api';
-import { ErrorState, PageLoading } from '../components/ui';
+import { Button, ErrorState, PageLoading } from '../components/ui';
+import { useI18n } from '../i18n';
 import { useAsync } from '../lib/useAsync';
 import type { JudgeAssignment, JudgeRole, ProviderId, ProviderStatus, PublicSettings } from '../types';
 
-const providerHelp: Record<ProviderId, { keyUrl?: string; note: string; suggested?: string }> = {
-  openai: { keyUrl: 'https://platform.openai.com/api-keys', note: 'Use a URL avançada para qualquer endpoint compatível com OpenAI (LM Studio, vLLM, OpenRouter).' },
-  anthropic: { keyUrl: 'https://console.anthropic.com/settings/keys', note: 'Usa o SDK oficial com saída estruturada.', suggested: 'claude-opus-5-5' },
-  gemini: { keyUrl: 'https://aistudio.google.com/apikey', note: 'Chave do Google AI Studio.' },
-  xai: { keyUrl: 'https://console.x.ai', note: 'Modelos Grok via API da xAI.' },
-  ollama: { note: 'Roda modelos locais, sem chave. Instale em ollama.com e baixe um modelo (ex.: ollama pull llama3.1).' },
-  'azure-openai': { note: 'Informe o endpoint do recurso e o nome do deployment. Fora de Development, usa managed identity.' },
+const providerHelp: Record<ProviderId, { keyUrl?: string; suggested?: string }> = {
+  openai: { keyUrl: 'https://platform.openai.com/api-keys' },
+  anthropic: { keyUrl: 'https://console.anthropic.com/settings/keys', suggested: 'claude-opus-5-5' },
+  gemini: { keyUrl: 'https://aistudio.google.com/apikey' },
+  xai: { keyUrl: 'https://console.x.ai' },
+  ollama: {},
+  'azure-openai': {},
 };
 
-const roles: { id: JudgeRole; name: string; description: string; icon: typeof Gavel }[] = [
-  { id: 'rigor', name: 'O Rigoroso', description: 'Corretude sob falha, garantias explícitas, contas que fecham.', icon: Gavel },
-  { id: 'pragmatic', name: 'O Pragmático', description: 'Simplicidade, custo e escopo que cabe na entrevista.', icon: Scale },
-  { id: 'moderator', name: 'Moderador', description: 'Escreve o feedback de consenso. A nota final é calculada pelo servidor.', icon: Sparkles },
+const roles: { id: JudgeRole; icon: typeof Gavel }[] = [
+  { id: 'rigor', icon: Gavel },
+  { id: 'pragmatic', icon: Scale },
+  { id: 'moderator', icon: Sparkles },
 ];
 
 export function SettingsPage() {
+  const { t } = useI18n();
   const loaded = useAsync(() => api.getSettings(), []);
-  if (api.mode === 'local') return <div className="container page"><ErrorState message="As configurações de juízes ficam na API. Rode o app com npm run dev para configurar provedores." /></div>;
+  if (api.mode === 'local') return <div className="container page"><ErrorState message={t.settings.needsApi} /></div>;
   if (loaded.loading) return <PageLoading />;
-  if (loaded.error || !loaded.data) return <div className="container page"><ErrorState message={loaded.error ?? 'Não foi possível carregar.'} onRetry={loaded.reload} /></div>;
+  if (loaded.error || !loaded.data) return <div className="container page"><ErrorState message={loaded.error ?? t.common.couldNotLoad} onRetry={loaded.reload} /></div>;
   return <SettingsForm initial={loaded.data} />;
 }
 
 function SettingsForm({ initial }: { initial: PublicSettings }) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState(initial);
   return (
     <div className="container page">
       <header className="page-header">
-        <p className="eyebrow">// CONFIGURAÇÕES</p>
-        <h1>Juízes e <span className="gradient-text">provedores de IA</span></h1>
-        <p className="hero-lead">Conecte seus provedores e escolha qual modelo faz cada papel no painel. Usar modelos diferentes para cada juiz deixa as avaliações mais independentes.</p>
+        <p className="eyebrow">{t.settings.eyebrow}</p>
+        <h1>{t.settings.title} <span className="gradient-text">{t.settings.titleAccent}</span></h1>
+        <p className="hero-lead">{t.settings.lead}</p>
       </header>
 
       {!settings.secretsEncrypted && (
-        <div className="banner banner-warning"><ShieldAlert size={18} /><p>As chaves salvas aqui ficam <b>sem criptografia</b> no banco local. Defina <code>SECRETS_KEY</code> no <code>.env</code> (qualquer frase longa) e salve as chaves de novo para guardá-las criptografadas.</p></div>
+        <div className="banner banner-warning"><ShieldAlert size={18} /><p>{t.settings.secretsWarning}</p></div>
       )}
 
-      <h2 className="section-title"><KeyRound size={17} />Provedores</h2>
+      <h2 className="section-title"><KeyRound size={17} />{t.settings.providers}</h2>
       <div className="provider-grid">
         {settings.providers.map((provider) => <ProviderCard key={provider.id} provider={provider} onSaved={setSettings} />)}
       </div>
@@ -53,6 +56,7 @@ function SettingsForm({ initial }: { initial: PublicSettings }) {
 }
 
 function ProviderCard({ provider, onSaved }: { provider: ProviderStatus; onSaved: (settings: PublicSettings) => void }) {
+  const { t } = useI18n();
   const help = providerHelp[provider.id];
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(provider.source === 'settings' || provider.id === 'ollama' || provider.id === 'azure-openai' ? provider.baseUrl ?? '' : '');
@@ -67,45 +71,47 @@ function ProviderCard({ provider, onSaved }: { provider: ProviderStatus; onSaved
     try {
       onSaved(await api.updateSettings({ providers: { [provider.id]: patch } }));
       setApiKey('');
-      setMessage({ tone: 'ok', text: 'Salvo.' });
+      setMessage({ tone: 'ok', text: t.common.saved });
     } catch (error) {
-      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Não foi possível salvar.' });
+      setMessage({ tone: 'error', text: error instanceof Error ? error.message : t.common.couldNotSave });
     } finally {
       setBusy(false);
     }
   }
 
-  const statusText = provider.configured ? (provider.source === 'env' ? 'Conectado via .env' : 'Conectado') : 'Não configurado';
+  const statusText = provider.configured ? (provider.source === 'env' ? t.settings.statusEnv : t.settings.statusConnected) : t.settings.statusNotConfigured;
+  const urlLabel = provider.id === 'azure-openai' ? t.settings.endpoint : provider.id === 'ollama' ? t.settings.ollamaUrl : t.settings.baseUrl;
+  const urlPlaceholder = provider.id === 'ollama' ? 'http://localhost:11434' : provider.id === 'azure-openai' ? t.settings.azurePlaceholder : provider.baseUrl ?? t.settings.providerDefault;
   return (
     <section className={`panel provider-card${provider.configured ? ' configured' : ''}`}>
       <header>
         <h3>{provider.label}</h3>
         <span className={`provider-status${provider.configured ? ' on' : ''}`}>{provider.configured ? <CircleCheck size={13} /> : <CircleX size={13} />}{statusText}</span>
       </header>
-      <p className="muted small">{help.note}{help.keyUrl && <> Chave em <a href={help.keyUrl} target="_blank" rel="noreferrer">{help.keyUrl.replace('https://', '')}</a>.</>}</p>
+      <p className="muted small">{t.settings.providerNotes[provider.id]}{help.keyUrl && t.settings.keyAt(<a href={help.keyUrl} target="_blank" rel="noreferrer">{help.keyUrl.replace('https://', '')}</a>)}</p>
+      {/* Fields sit at the bottom of the card, right above the actions, so inputs line up across a row. */}
       <form className="provider-form" onSubmit={(event) => { event.preventDefault(); void save({ ...(apiKey.trim() ? { apiKey } : {}), ...(advanced ? { baseUrl: baseUrl.trim() || null } : {}), ...(provider.id === 'azure-openai' ? { deployment: deployment.trim() || null } : {}) }); }}>
         {provider.needsKey && (
-          <label className="field"><span>Chave de API</span>
-            <input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={provider.keyHint ? `Salva: ${provider.keyHint} — digite para trocar` : 'Cole sua chave'} />
+          <label className="field"><span>{t.settings.apiKey}</span>
+            <input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={provider.keyHint ? t.settings.keySaved(provider.keyHint) : t.settings.pasteKey} />
           </label>
         )}
         {provider.id === 'azure-openai' && (
           <>
-            <label className="field"><span>Chave de API (opcional fora de Development)</span><input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={provider.keyHint ?? 'Cole sua chave'} /></label>
-            <label className="field"><span>Deployment</span><input value={deployment} onChange={(event) => setDeployment(event.target.value)} placeholder="nome-do-deployment" /></label>
+            <label className="field"><span>{t.settings.apiKeyOptional}</span><input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={provider.keyHint ?? t.settings.pasteKey} /></label>
+            <label className="field"><span>{t.settings.deployment}</span><input value={deployment} onChange={(event) => setDeployment(event.target.value)} placeholder={t.settings.deploymentPlaceholder} /></label>
           </>
         )}
-        {advanced ? (
-          <label className="field"><span>{provider.id === 'azure-openai' ? 'Endpoint' : provider.id === 'ollama' ? 'URL do Ollama' : 'URL base (opcional)'}</span>
-            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={provider.id === 'ollama' ? 'http://localhost:11434' : provider.id === 'azure-openai' ? 'https://seu-recurso.openai.azure.com' : provider.baseUrl ?? 'padrão do provedor'} />
+        {advanced && (
+          <label className="field"><span>{urlLabel}</span>
+            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={urlPlaceholder} />
           </label>
-        ) : (
-          <button type="button" className="link-button" onClick={() => setAdvanced(true)}>Usar endpoint customizado</button>
         )}
         <div className="provider-actions">
-          <button className="btn btn-primary btn-sm" disabled={busy}>{busy ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}{provider.id === 'ollama' && !provider.configured ? 'Ativar' : 'Salvar'}</button>
-          {provider.source === 'settings' && provider.keyHint && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void save({ apiKey: null })}><Trash2 size={14} />Remover chave</button>}
+          <Button type="submit" variant="primary" size="sm" disabled={busy}>{busy ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}{provider.id === 'ollama' && !provider.configured ? t.settings.activate : t.common.save}</Button>
+          {provider.source === 'settings' && provider.keyHint && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void save({ apiKey: null })}><Trash2 size={14} />{t.settings.removeKey}</Button>}
           {message && <span className={`inline-status ${message.tone}`}>{message.text}</span>}
+          {!advanced && <button type="button" className="link-button provider-custom" onClick={() => setAdvanced(true)}>{t.settings.customEndpoint}</button>}
         </div>
       </form>
     </section>
@@ -113,6 +119,7 @@ function ProviderCard({ provider, onSaved }: { provider: ProviderStatus; onSaved
 }
 
 function JudgesSection({ settings, onSaved }: { settings: PublicSettings; onSaved: (settings: PublicSettings) => void }) {
+  const { t, locale } = useI18n();
   const [judges, setJudges] = useState<Record<JudgeRole, JudgeAssignment>>(settings.judges);
   const [samples, setSamples] = useState(settings.samples);
   const [models, setModels] = useState<Partial<Record<ProviderId, string[]>>>({});
@@ -129,7 +136,7 @@ function JudgesSection({ settings, onSaved }: { settings: PublicSettings; onSave
       const items = await api.listProviderModels(provider);
       setModels((current) => ({ ...current, [provider]: items }));
     } catch (error) {
-      setModelErrors((current) => ({ ...current, [provider]: error instanceof Error ? error.message : 'Falha ao listar modelos.' }));
+      setModelErrors((current) => ({ ...current, [provider]: error instanceof Error ? error.message : t.settings.listModelsFailed }));
     }
   }
 
@@ -154,9 +161,9 @@ function JudgesSection({ settings, onSaved }: { settings: PublicSettings; onSave
     setTests((current) => ({ ...current, [role]: { running: true } }));
     try {
       const result = await api.testProvider(provider, model);
-      setTests((current) => ({ ...current, [role]: { running: false, ok: result.ok, text: result.ok ? `Respondeu em ${(result.latencyMs / 1000).toFixed(1)} s` : result.error ?? 'Resposta inesperada.' } }));
+      setTests((current) => ({ ...current, [role]: { running: false, ok: result.ok, text: result.ok ? t.settings.answeredIn((result.latencyMs / 1000).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : result.error ?? t.settings.unexpectedAnswer } }));
     } catch (error) {
-      setTests((current) => ({ ...current, [role]: { running: false, ok: false, text: error instanceof Error ? error.message : 'Falhou.' } }));
+      setTests((current) => ({ ...current, [role]: { running: false, ok: false, text: error instanceof Error ? error.message : t.common.failed } }));
     }
   }
 
@@ -164,9 +171,9 @@ function JudgesSection({ settings, onSaved }: { settings: PublicSettings; onSave
     setSaving(true);
     try {
       onSaved(await api.updateSettings({ judges, samples }));
-      setSaved('Painel salvo. As próximas submissões usam esta configuração.');
+      setSaved(t.settings.panelSaved);
     } catch (error) {
-      setSaved(error instanceof Error ? error.message : 'Não foi possível salvar.');
+      setSaved(error instanceof Error ? error.message : t.common.couldNotSave);
     } finally {
       setSaving(false);
     }
@@ -175,9 +182,9 @@ function JudgesSection({ settings, onSaved }: { settings: PublicSettings; onSave
   const complete = roles.every((role) => judges[role.id].provider && judges[role.id].model);
   return (
     <>
-      <h2 className="section-title"><Gavel size={17} />Painel de juízes</h2>
+      <h2 className="section-title"><Gavel size={17} />{t.settings.judgePanel}</h2>
       {configured.length === 0 ? (
-        <p className="hint-box">Conecte pelo menos um provedor acima para escolher os modelos dos juízes.</p>
+        <p className="hint-box">{t.settings.connectFirst}</p>
       ) : (
         <div className="panel judge-config">
           {roles.map((role) => {
@@ -186,20 +193,20 @@ function JudgesSection({ settings, onSaved }: { settings: PublicSettings; onSave
             const state = tests[role.id];
             return (
               <div key={role.id} className="judge-row">
-                <div className="judge-row-title"><span className={`judge-avatar role-${role.id}`}><Icon size={16} /></span><span><strong>{role.name}</strong><small>{role.description}</small></span></div>
-                <label className="field"><span>Provedor</span>
+                <div className="judge-row-title"><span className={`judge-avatar role-${role.id}`}><Icon size={16} /></span><span><strong>{t.judges[role.id].name}</strong><small>{t.judges[role.id].role}</small></span></div>
+                <label className="field"><span>{t.settings.provider}</span>
                   <select value={assignment.provider ?? ''} onChange={(event) => assign(role.id, { provider: (event.target.value || null) as ProviderId | null })}>
-                    <option value="">Escolha…</option>
+                    <option value="">{t.settings.choose}</option>
                     {configured.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
                   </select>
                 </label>
-                <label className="field"><span>Modelo {assignment.provider && <button type="button" className="link-button" onClick={() => void loadModels(assignment.provider!, true)} title="Recarregar lista de modelos"><RefreshCw size={11} /></button>}</span>
-                  <input list={`models-${role.id}`} value={assignment.model ?? ''} onChange={(event) => assign(role.id, { model: event.target.value })} placeholder={assignment.provider ? 'Digite ou escolha um modelo' : '—'} disabled={!assignment.provider} />
+                <label className="field"><span>{t.settings.model} {assignment.provider && <button type="button" className="link-button" onClick={() => void loadModels(assignment.provider!, true)} title={t.settings.reloadModels}><RefreshCw size={11} /></button>}</span>
+                  <input list={`models-${role.id}`} value={assignment.model ?? ''} onChange={(event) => assign(role.id, { model: event.target.value })} placeholder={assignment.provider ? t.settings.modelPlaceholder : '—'} disabled={!assignment.provider} />
                   <datalist id={`models-${role.id}`}>{(assignment.provider ? models[assignment.provider] ?? [] : []).map((model) => <option key={model} value={model} />)}</datalist>
                   {assignment.provider && modelErrors[assignment.provider] && <small className="form-error">{modelErrors[assignment.provider]}</small>}
                 </label>
                 <div className="judge-row-test">
-                  <button type="button" className="btn btn-ghost btn-sm" disabled={!assignment.provider || !assignment.model || state?.running} onClick={() => void test(role.id)}>{state?.running ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}Testar</button>
+                  <Button size="sm" disabled={!assignment.provider || !assignment.model || state?.running} onClick={() => void test(role.id)}>{state?.running ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}{t.settings.test}</Button>
                   {state?.text && <span className={`inline-status ${state.ok ? 'ok' : 'error'}`} title={state.text}>{state.text}</span>}
                 </div>
               </div>
@@ -207,16 +214,16 @@ function JudgesSection({ settings, onSaved }: { settings: PublicSettings; onSave
           })}
 
           <div className="samples-row">
-            <div><strong>Consistência</strong><small>Rodar cada juiz várias vezes e usar a mediana reduz a variação entre avaliações do mesmo desenho.</small></div>
-            <div className="segmented" role="radiogroup" aria-label="Amostras por juiz">
-              <button type="button" role="radio" aria-checked={samples === 1} className={samples === 1 ? 'active' : ''} onClick={() => { setSamples(1); setSaved(null); }}>1× · 5 chamadas</button>
-              <button type="button" role="radio" aria-checked={samples === 3} className={samples === 3 ? 'active' : ''} onClick={() => { setSamples(3); setSaved(null); }}>3× · 9 chamadas</button>
+            <div><strong>{t.settings.consistency}</strong><small>{t.settings.consistencyBody}</small></div>
+            <div className="segmented" role="radiogroup" aria-label={t.settings.samplesLabel}>
+              <button type="button" role="radio" aria-checked={samples === 1} className={samples === 1 ? 'active' : ''} onClick={() => { setSamples(1); setSaved(null); }}>{t.settings.samples(1, 5)}</button>
+              <button type="button" role="radio" aria-checked={samples === 3} className={samples === 3 ? 'active' : ''} onClick={() => { setSamples(3); setSaved(null); }}>{t.settings.samples(3, 9)}</button>
             </div>
           </div>
 
           <div className="provider-actions">
-            <button className="btn btn-primary" disabled={saving || !complete} onClick={() => void save()}>{saving ? <LoaderCircle size={15} className="spin" /> : <Save size={15} />}Salvar painel</button>
-            {!complete && <span className="muted small">Escolha provedor e modelo para os três papéis.</span>}
+            <Button variant="primary" disabled={saving || !complete} onClick={() => void save()}>{saving ? <LoaderCircle size={15} className="spin" /> : <Save size={15} />}{t.settings.savePanel}</Button>
+            {!complete && <span className="muted small">{t.settings.incomplete}</span>}
             {saved && <span className="inline-status ok">{saved}</span>}
           </div>
         </div>

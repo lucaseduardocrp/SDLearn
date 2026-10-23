@@ -5,6 +5,9 @@ import {
 } from '@xyflow/react';
 import { Maximize, StickyNote, Workflow } from 'lucide-react';
 import { componentCategories, componentList } from '@shared/catalog/components';
+import { engineMessages } from '@shared/i18n/engine';
+import { useI18n } from '../i18n';
+import { Button } from '../components/ui';
 import type { ChaosResult, ComponentKind } from '../types';
 import type { FlowEdge, FlowNode } from './designModel';
 import { kindIcons } from './kindIcons';
@@ -25,6 +28,8 @@ interface CanvasEditorProps {
 }
 
 export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChange, onConnect, onAdd, onSelectionChange, onLayout }: CanvasEditorProps) {
+  const { t, locale } = useI18n();
+  const catalogText = engineMessages(locale);
   const wrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
 
@@ -58,10 +63,10 @@ export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChan
 
   return (
     <div className="canvas-shell">
-      <aside className="palette" aria-label="Componentes">
+      <aside className="palette" aria-label={t.canvas.palette}>
         {componentCategories.map((category) => (
           <div key={category} className="palette-group">
-            <span className="palette-title">{category}</span>
+            <span className="palette-title">{catalogText.componentCategories[category]}</span>
             {componentList.filter((spec) => spec.category === category).map((spec) => {
               const Icon = kindIcons[spec.kind];
               return (
@@ -71,7 +76,7 @@ export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChan
                   draggable
                   onDragStart={(event) => { event.dataTransfer.setData(DRAG_TYPE, spec.kind); event.dataTransfer.effectAllowed = 'move'; }}
                   onClick={() => addAtCenter(spec.kind)}
-                  title={`${spec.description} Arraste para o canvas ou clique para adicionar.`}
+                  title={t.canvas.paletteItemTitle(catalogText.componentDescriptions[spec.kind])}
                 >
                   <Icon size={14} /><span>{spec.label}</span>
                 </button>
@@ -80,9 +85,9 @@ export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChan
           </div>
         ))}
         <div className="palette-group">
-          <span className="palette-title">Anotação</span>
+          <span className="palette-title">{t.canvas.annotation}</span>
           <button className="palette-item category-note" draggable onDragStart={(event) => event.dataTransfer.setData(DRAG_TYPE, 'note')} onClick={() => addAtCenter('note')}>
-            <StickyNote size={14} /><span>Nota</span>
+            <StickyNote size={14} /><span>{t.canvas.note}</span>
           </button>
         </div>
       </aside>
@@ -114,19 +119,19 @@ export function CanvasEditor({ nodes, edges, overlay, onNodesChange, onEdgesChan
           </ReactFlow>
         </ChaosOverlayContext.Provider>
         <div className="canvas-toolbar">
-          <button className="btn btn-ghost btn-sm" onClick={onLayout} title="Reorganiza os componentes em colunas, da esquerda (quem chama) para a direita (quem é chamado)"><Workflow size={14} />Organizar</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => void fitView({ padding: 0.25, minZoom: 0.65, maxZoom: 1.15, duration: 300 })} title="Enquadra o diagrama na tela"><Maximize size={14} />Centralizar</button>
+          <Button size="sm" onClick={onLayout} title={t.canvas.layoutTitle}><Workflow size={14} />{t.canvas.layout}</Button>
+          <Button size="sm" onClick={() => void fitView({ padding: 0.25, minZoom: 0.65, maxZoom: 1.15, duration: 300 })} title={t.canvas.fitTitle}><Maximize size={14} />{t.canvas.fit}</Button>
         </div>
-        <div className="canvas-legend" aria-label="Legenda">
-          <span><i className="legend-dot in" />entrada</span>
-          <span><i className="legend-dot out" />saída</span>
-          <span><i className="legend-line" />chamada síncrona</span>
-          <span><i className="legend-line async" />assíncrona</span>
+        <div className="canvas-legend" aria-label={t.canvas.legend}>
+          <span><i className="legend-dot in" />{t.canvas.legendIn}</span>
+          <span><i className="legend-dot out" />{t.canvas.legendOut}</span>
+          <span><i className="legend-line" />{t.canvas.legendSync}</span>
+          <span><i className="legend-line async" />{t.canvas.legendAsync}</span>
         </div>
         {nodes.length <= 1 && (
           <div className="canvas-hint">
-            <strong>Comece pelo fluxo principal</strong>
-            <span>Arraste componentes da paleta para cá. Depois puxe da <b>bolinha direita</b> (saída) de um componente até a <b>bolinha esquerda</b> (entrada) de outro: a seta significa “chama”.</span>
+            <strong>{t.canvas.hintTitle}</strong>
+            <span>{t.canvas.hintBody}</span>
           </div>
         )}
       </div>

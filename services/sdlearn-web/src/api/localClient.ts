@@ -2,6 +2,7 @@ import { coreCatalog } from '@shared/catalog/catalog';
 import { chaosScenarios, simulateChaos } from '@shared/engine/chaos';
 import { analyzeDesign } from '@shared/engine/rubric';
 import type { ChaosRun, Evaluation, PracticeSession } from '../types';
+import { getLocale, getMessages } from '../i18n';
 import type { ApiClient } from './types';
 
 const STORAGE_KEY = 'archon.offline.v1';
@@ -30,16 +31,16 @@ function persist(): void {
 
 function requireSession(id: string): PracticeSession {
   const session = state.sessions.find((item) => item.id === id);
-  if (!session) throw new Error('Sessão não encontrada.');
+  if (!session) throw new Error(getMessages().api.sessionNotFound);
   return session;
 }
 
 const { problems, articles, findProblem, findArticle } = coreCatalog;
-const needsApi = () => Promise.reject(new Error('Disponível apenas com a API rodando (npm run dev). O modo offline usa só o conteúdo nativo e a pré-avaliação.'));
+const needsApi = () => Promise.reject(new Error(getMessages().api.offlineOnly));
 
 function requireProblem(id: string) {
   const problem = findProblem(id);
-  if (!problem) throw new Error('Problema não encontrado.');
+  if (!problem) throw new Error(getMessages().api.problemNotFound);
   return problem;
 }
 
@@ -62,7 +63,7 @@ export const localClient: ApiClient = {
   listArticles: () => delay({ items: articles.map(({ body: _body, ...summary }) => summary), nextCursor: null }),
   getArticle: async (slug) => {
     const article = findArticle(slug);
-    if (!article) throw new Error('Artigo não encontrado.');
+    if (!article) throw new Error(getMessages().api.articleNotFound);
     return delay(article);
   },
   createSession: async (problemId) => {
@@ -85,10 +86,10 @@ export const localClient: ApiClient = {
     persist();
     return delay(undefined);
   },
-  listChaosScenarios: () => delay(chaosScenarios),
+  listChaosScenarios: () => delay(chaosScenarios(getLocale())),
   runChaos: async (sessionId, request) => {
     const session = requireSession(sessionId);
-    const run: ChaosRun = { id: crypto.randomUUID(), sessionId, createdAt: new Date().toISOString(), result: simulateChaos(session.design, requireProblem(session.problemId), request) };
+    const run: ChaosRun = { id: crypto.randomUUID(), sessionId, createdAt: new Date().toISOString(), result: simulateChaos(session.design, requireProblem(session.problemId), request, { locale: getLocale() }) };
     state = { ...state, chaosRuns: [run, ...state.chaosRuns] };
     persist();
     return delay(run);
@@ -100,9 +101,9 @@ export const localClient: ApiClient = {
     const now = new Date().toISOString();
     const evaluation: Evaluation = {
       id: crypto.randomUUID(), sessionId, problemId: problem.id, problemTitle: problem.title, createdAt: now, updatedAt: now,
-      status: 'heuristic', provider: null, rubric: analyzeDesign(session.design, problem).rubric, assessments: [], debate: [], consensus: null,
+      status: 'heuristic', provider: null, rubric: analyzeDesign(session.design, problem, getLocale()).rubric, assessments: [], debate: [], consensus: null,
       judgeConfig: null,
-      error: 'Modo offline: os juízes de IA rodam na API. Esta é apenas a pré-avaliação automática do seu desenho.',
+      error: getMessages().api.offlineHeuristic,
     };
     state = { ...state, evaluations: [evaluation, ...state.evaluations] };
     upsertSession({ ...session, status: session.status === 'judged' ? 'judged' : 'submitted', updatedAt: now });
@@ -119,7 +120,7 @@ export const localClient: ApiClient = {
   removePack: needsApi,
   getEvaluation: async (id) => {
     const evaluation = state.evaluations.find((item) => item.id === id);
-    if (!evaluation) throw new Error('Avaliação não encontrada.');
+    if (!evaluation) throw new Error(getMessages().api.evaluationNotFound);
     return delay(evaluation);
   },
 };

@@ -1,7 +1,8 @@
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { Compass } from 'lucide-react';
 import { TopBar } from './components/TopBar';
-import { EmptyState } from './components/ui';
+import { buttonClass, EmptyState } from './components/ui';
+import { useI18n } from './i18n';
 import { EvaluationPage } from './pages/EvaluationPage';
 import { HubPage } from './pages/HubPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -12,6 +13,7 @@ import { SessionsPage } from './pages/SessionsPage';
 import { WorkspacePage } from './workspace/WorkspacePage';
 
 function App() {
+  const { t } = useI18n();
   const { pathname } = useLocation();
   const inWorkspace = /^\/sessions\/[^/]+$/.test(pathname);
   return (
@@ -27,12 +29,12 @@ function App() {
         <Route path="/learn/:slug" element={<ArticlePage />} />
         <Route path="/hub" element={<HubPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<div className="container page"><EmptyState icon={<Compass size={22} />} title="Página não encontrada" body="Esse endereço não existe." action={<Link to="/" className="btn btn-primary">Ir para a biblioteca</Link>} /></div>} />
+        <Route path="*" element={<div className="container page"><EmptyState icon={<Compass size={22} />} title={t.app.notFoundTitle} body={t.app.notFoundBody} action={<Link to="/" className={buttonClass({ variant: 'primary' })}>{t.common.goToLibrary}</Link>} /></div>} />
       </Routes>
       {!inWorkspace && (
         <footer className="footer container">
-          <span>Archon <span className="mono-dim">/sd-lab</span> · desenhe, quebre, seja julgado</span>
-          <span className="mono-dim">canvas · chaos · 2 juízes · mermaid</span>
+          <span>Archon <span className="mono-dim">/sd-lab</span> · {t.app.footerTagline}</span>
+          <span className="mono-dim">{t.app.footerFeatures}</span>
         </footer>
       )}
     </div>

@@ -6,6 +6,8 @@ import {
 import type {
   ChaosRequestInput, CreateSessionRequest, EvaluationListQuery, ProblemQuery, SaveDesignRequest, SessionListQuery,
 } from '../../shared/schemas/validation';
+import type { Locale } from '../../shared/i18n/locale';
+import { RequestLocale } from './common/request-locale';
 import { ZodValidationPipe } from './common/zod-validation.pipe';
 import { WorkbenchService } from './workbench.service';
 
@@ -64,8 +66,8 @@ export class WorkbenchController {
   }
 
   @Get('chaos/scenarios')
-  listScenarios() {
-    return { items: this.service.listScenarios() };
+  listScenarios(@RequestLocale() locale: Locale) {
+    return { items: this.service.listScenarios(locale) };
   }
 
   @Post('sessions/:sessionId/chaos-runs')
@@ -73,8 +75,9 @@ export class WorkbenchController {
   async runChaos(
     @Param('sessionId', new ZodValidationPipe(idParamSchema)) sessionId: string,
     @Body(new ZodValidationPipe(chaosRequestSchema)) input: ChaosRequestInput,
+    @RequestLocale() locale: Locale,
   ) {
-    return { run: await this.service.runChaos(sessionId, input) };
+    return { run: await this.service.runChaos(sessionId, input, locale) };
   }
 
   @Get('sessions/:sessionId/chaos-runs')
@@ -84,17 +87,17 @@ export class WorkbenchController {
 
   @Post('sessions/:sessionId/evaluations')
   @HttpCode(HttpStatus.ACCEPTED)
-  async requestEvaluation(@Param('sessionId', new ZodValidationPipe(idParamSchema)) sessionId: string) {
-    return { evaluation: await this.service.requestEvaluation(sessionId) };
+  async requestEvaluation(@Param('sessionId', new ZodValidationPipe(idParamSchema)) sessionId: string, @RequestLocale() locale: Locale) {
+    return { evaluation: await this.service.requestEvaluation(sessionId, locale) };
   }
 
   @Get('evaluations')
-  listEvaluations(@Query(new ZodValidationPipe(evaluationListQuerySchema)) query: EvaluationListQuery) {
-    return this.service.listEvaluations(query);
+  listEvaluations(@Query(new ZodValidationPipe(evaluationListQuerySchema)) query: EvaluationListQuery, @RequestLocale() locale: Locale) {
+    return this.service.listEvaluations(query, locale);
   }
 
   @Get('evaluations/:evaluationId')
-  async getEvaluation(@Param('evaluationId', new ZodValidationPipe(idParamSchema)) evaluationId: string) {
-    return { evaluation: await this.service.getEvaluation(evaluationId) };
+  async getEvaluation(@Param('evaluationId', new ZodValidationPipe(idParamSchema)) evaluationId: string, @RequestLocale() locale: Locale) {
+    return { evaluation: await this.service.getEvaluation(evaluationId, locale) };
   }
 }

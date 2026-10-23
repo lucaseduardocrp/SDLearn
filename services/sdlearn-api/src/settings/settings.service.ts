@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { localized } from '../../../shared/i18n/locale';
 import type { JudgeAssignment, JudgeRole, ProviderId, ProviderStatus, PublicSettings, SettingsUpdate } from '../../../shared/types/entities';
 import { APP_CONFIG, type AppConfig } from '../config/app-config';
 import { AppError } from '../errors/app-error';
@@ -62,7 +63,7 @@ export class SettingsService {
   /** Builds a provider client from saved settings, falling back to environment variables. */
   async provider(id: ProviderId): Promise<LlmProvider> {
     const credentials = this.credentials(id, await this.load());
-    if (!credentials) throw new AppError(422, 'VALIDATION_ERROR', `${providerLabels[id]} is not configured.`);
+    if (!credentials) throw new AppError(422, 'VALIDATION_ERROR', localized(`${providerLabels[id]} não está configurado.`, `${providerLabels[id]} is not configured.`));
     return createProvider(id, credentials);
   }
 

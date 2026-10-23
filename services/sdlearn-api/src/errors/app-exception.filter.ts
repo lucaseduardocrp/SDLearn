@@ -2,6 +2,7 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import type { ErrorCode, ErrorResponse } from '../../../shared/types/entities';
+import { localeOf } from '../common/request-locale';
 import { AppError } from './app-error';
 
 @Catch()
@@ -14,18 +15,19 @@ export class AppExceptionFilter implements ExceptionFilter {
     const response = http.getResponse<Response>();
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let code: ErrorCode = 'INTERNAL_ERROR';
-    let message = 'An internal error occurred';
+    const locale = localeOf(request);
+    let message = locale === 'en' ? 'An internal error occurred' : 'Ocorreu um erro interno.';
     let details: Record<string, unknown> | null = null;
 
     if (exception instanceof AppError) {
       status = exception.statusCode;
       code = exception.code;
-      message = exception.message;
+      message = exception.text[locale];
       details = exception.details;
     } else if (exception instanceof ZodError) {
       status = HttpStatus.UNPROCESSABLE_ENTITY;
       code = 'VALIDATION_ERROR';
-      message = 'Request validation failed';
+      message = locale === 'en' ? 'Request validation failed' : 'A requisição é inválida.';
       details = { issues: exception.issues.map((issue) => ({ field: issue.path.join('.'), message: issue.message })) };
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();

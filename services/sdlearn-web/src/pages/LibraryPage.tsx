@@ -2,15 +2,16 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Package, Search, SearchX, X } from 'lucide-react';
 import { api } from '../api';
-import { DifficultyBadge, EmptyState, ErrorState, PageLoading, TagChip } from '../components/ui';
+import { Button, buttonClass, DifficultyBadge, EmptyState, ErrorState, PageLoading, TagChip } from '../components/ui';
+import { useI18n } from '../i18n';
 import { padNumber, scoreTone } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 import type { Difficulty, SessionSummary } from '../types';
 
-const features = ['Todos os problemas', 'Sessões ilimitadas', 'Canvas + chaos ilimitado', '2 juízes de IA (0-100)', 'Veredito pass/borderline/fail', 'Feedback & consenso', 'Editor Mermaid'];
 const filters: ('All' | Difficulty)[] = ['All', 'Easy', 'Medium', 'Hard'];
 
 export function LibraryPage() {
+  const { t } = useI18n();
   const problems = useAsync(() => api.listProblems(), []);
   const sessions = useAsync(() => api.listSessions(), []);
   const [difficulty, setDifficulty] = useState<'All' | Difficulty>('All');
@@ -37,32 +38,34 @@ export function LibraryPage() {
   return (
     <div className="container page">
       <section className="hero">
-        <p className="eyebrow">// SYSTEM DESIGN TRAINING GROUND</p>
-        <h1>Desenhe. Quebre. <span className="gradient-text">Seja julgado.</span></h1>
-        <p className="hero-lead">Monte arquiteturas no canvas, injete falhas com chaos e receba nota de dois juízes de IA com feedback completo.</p>
+        <p className="eyebrow">{t.library.eyebrow}</p>
+        <h1>{t.library.title} <span className="gradient-text">{t.library.titleAccent}</span></h1>
+        <p className="hero-lead">{t.library.lead}</p>
         <ul className="feature-chips">
-          {features.map((feature) => <li key={feature}>✓ {feature}</li>)}
+          {t.library.features.map((feature) => <li key={feature}>✓ {feature}</li>)}
         </ul>
       </section>
 
-      <div className="library-toolbar">
-        <div className="filter-pills" role="group" aria-label="Filtrar por dificuldade">
+      <div className="toolbar">
+        <div className="toolbar-group" role="group" aria-label={t.library.filterByDifficulty}>
           {filters.map((item) => (
-            <button key={item} className={`pill${difficulty === item ? ' active' : ''}`} aria-pressed={difficulty === item} onClick={() => setDifficulty(item)}>{item}</button>
+            <Button key={item} variant="toggle" size="sm" active={difficulty === item} aria-pressed={difficulty === item} onClick={() => setDifficulty(item)}>
+              {item === 'All' ? t.library.all : t.difficulty[item]}
+            </Button>
           ))}
         </div>
-        <div className="library-toolbar-right">
-          {packFilter && <button className="pill active" onClick={() => setParams({})} title="Mostrar todos os desafios"><Package size={13} /> {packFilter} <X size={12} /></button>}
-          {api.mode === 'http' && <Link to="/hub" className="btn btn-ghost btn-sm"><Package size={14} />Mais desafios no Hub</Link>}
+        <div className="toolbar-group toolbar-end">
+          {packFilter && <Button variant="toggle" size="sm" active onClick={() => setParams({})} title={t.library.showAllChallenges}><Package size={14} />{packFilter}<X size={13} /></Button>}
+          {api.mode === 'http' && <Link to="/hub" className={buttonClass({ size: 'sm' })}><Package size={14} />{t.library.moreOnHub}</Link>}
           <label className="search-field">
             <Search size={15} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar problema ou conceito…" aria-label="Buscar problemas" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.library.searchPlaceholder} aria-label={t.library.searchLabel} />
           </label>
         </div>
       </div>
 
       {problems.loading ? <PageLoading /> : problems.error ? <ErrorState message={problems.error} onRetry={problems.reload} /> : visible.length === 0 ? (
-        <EmptyState icon={<SearchX size={22} />} title="Nenhum problema encontrado" body="Tente outra dificuldade ou outro termo de busca." action={<button className="btn btn-ghost" onClick={() => { setQuery(''); setDifficulty('All'); setParams({}); }}>Limpar filtros</button>} />
+        <EmptyState icon={<SearchX size={22} />} title={t.library.emptyTitle} body={t.library.emptyBody} action={<Button onClick={() => { setQuery(''); setDifficulty('All'); setParams({}); }}>{t.library.clearFilters}</Button>} />
       ) : (
         <div className="problem-grid">
           {visible.map((problem) => {
@@ -70,7 +73,7 @@ export function LibraryPage() {
             return (
               <Link key={problem.id} to={`/problems/${problem.id}`} className="problem-card">
                 <div className="problem-card-top">
-                  <span className="mono-dim">{padNumber(problem.number)}{problem.source && <span className="source-chip" title={`Pacote ${problem.source.packName} ${problem.source.version}`}><Package size={11} />{problem.source.packName}</span>}</span>
+                  <span className="mono-dim">{padNumber(problem.number)}{problem.source && <span className="source-chip" title={t.library.packTitle(problem.source.packName, problem.source.version)}><Package size={11} />{problem.source.packName}</span>}</span>
                   <DifficultyBadge difficulty={problem.difficulty} />
                 </div>
                 <h3>{problem.title}</h3>
@@ -78,8 +81,8 @@ export function LibraryPage() {
                 <div className="tag-row">{problem.tags.map((tag) => <TagChip key={tag}>{tag}</TagChip>)}</div>
                 {mine && (
                   <div className="problem-card-progress">
-                    <span>{mine.count} {mine.count === 1 ? 'sessão' : 'sessões'}</span>
-                    {mine.best !== null && <span className={`best tone-${scoreTone(mine.best)}`}>melhor {mine.best}</span>}
+                    <span>{t.library.sessionCount(mine.count)}</span>
+                    {mine.best !== null && <span className={`best tone-${scoreTone(mine.best)}`}>{t.library.best(mine.best)}</span>}
                   </div>
                 )}
               </Link>

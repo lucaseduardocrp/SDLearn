@@ -10,8 +10,9 @@ import { simulateChaos } from '@shared/engine/chaos';
 import { designToMermaid, layeredLayout, mermaidToDesign } from '@shared/engine/graph';
 import { analyzeDesign } from '@shared/engine/rubric';
 import { api } from '../api';
-import { DifficultyBadge, ErrorState, PageLoading } from '../components/ui';
-import { formatDuration, padNumber } from '../lib/format';
+import { Button, DifficultyBadge, ErrorState, PageLoading } from '../components/ui';
+import { useI18n } from '../i18n';
+import { formatDuration, formatNumber, padNumber } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 import type { ChaosRequest, ChaosResult, ChaosRun, ComponentKind, Design, Evaluation, PracticeSession, ProblemDetail } from '../types';
 import { CanvasEditor } from './CanvasEditor';
@@ -24,6 +25,7 @@ import { MermaidPanel } from './MermaidPanel';
 interface WorkspaceData { session: PracticeSession; problem: ProblemDetail; runs: ChaosRun[]; evaluations: Evaluation[]; aiAvailable: boolean }
 
 export function WorkspacePage() {
+  const { t } = useI18n();
   const { sessionId = '' } = useParams();
   const loaded = useAsync<WorkspaceData>(async () => {
     const session = await api.getSession(sessionId);
@@ -34,7 +36,7 @@ export function WorkspacePage() {
   }, [sessionId]);
 
   if (loaded.loading) return <PageLoading />;
-  if (loaded.error || !loaded.data) return <div className="container page"><ErrorState message={loaded.error ?? 'Sessão não encontrada.'} onRetry={loaded.reload} /></div>;
+  if (loaded.error || !loaded.data) return <div className="container page"><ErrorState message={loaded.error ?? t.workspace.sessionNotFound} onRetry={loaded.reload} /></div>;
   return <ReactFlowProvider><Workspace key={sessionId} initial={loaded.data} /></ReactFlowProvider>;
 }
 
@@ -42,6 +44,7 @@ type SelectionState = { nodeId?: string; edgeId?: string };
 
 function Workspace({ initial }: { initial: WorkspaceData }) {
   const { session, problem } = initial;
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const { fitView } = useReactFlow();
   const initialFlow = useMemo(() => toFlow(session.design), [session.design]);
@@ -90,13 +93,13 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
         setSavedRevision((value) => Math.max(value, target));
         setSaveError(null);
       } catch (error) {
-        setSaveError(error instanceof Error ? error.message : 'Falha ao salvar.');
+        setSaveError(error instanceof Error ? error.message : t.workspace.saveFailed);
       } finally {
         setSaving(false);
       }
     });
     return saveChain.current;
-  }, [currentDesign, session.id]);
+  }, [currentDesign, session.id, t]);
 
   const dirty = revision !== savedRevision;
   useEffect(() => {
@@ -189,19 +192,19 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
   const selectedNode = nodes.find((node) => node.id === selection.nodeId);
   const selectedEdge = edges.find((edge) => edge.id === selection.edgeId);
   const labelOf = (id: string) => nodes.find((node) => node.id === id)?.data.label ?? id;
-  const selectionLabel = selectedNode ? selectedNode.data.label || 'Nota' : selectedEdge ? `${labelOf(selectedEdge.source)} → ${labelOf(selectedEdge.target)}` : undefined;
+  const selectionLabel = selectedNode ? selectedNode.data.label || t.workspace.note : selectedEdge ? `${labelOf(selectedEdge.source)} → ${labelOf(selectedEdge.target)}` : undefined;
 
-  const warnings = useMemo(() => designWarnings(nodes, edges), [nodes, edges]);
+  const warnings = useMemo(() => designWarnings(nodes, edges, t.workspace.warnings), [nodes, edges, t]);
   const designForAnalysis = useMemo(() => ({ ...fromFlow(nodes, edges), notes, mermaid }), [nodes, edges, notes, mermaid]);
   const deferredDesign = useDeferredValue(designForAnalysis);
-  const rubric = useMemo(() => analyzeDesign(deferredDesign, problem).rubric, [deferredDesign, problem]);
+  const rubric = useMemo(() => analyzeDesign(deferredDesign, problem, locale).rubric, [deferredDesign, problem, locale]);
 
   async function runChaos(request: ChaosRequest) {
     setChaosError(null);
     try {
-      setOverlay(simulateChaos(currentDesign(), problem, request));
+      setOverlay(simulateChaos(currentDesign(), problem, request, { locale }));
     } catch (error) {
-      setChaosError(error instanceof Error ? error.message : 'Não foi possível simular.');
+      setChaosError(error instanceof Error ? error.message : t.workspace.simulateFailed);
       return;
     }
     setChaosRunning(true);
@@ -210,7 +213,7 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
       const run = await api.runChaos(session.id, request);
       setRuns((current) => [run, ...current]);
     } catch (error) {
-      setChaosError(`Resultado exibido, mas não foi registrado: ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+      setChaosError(t.workspace.notRecorded(error instanceof Error ? error.message : t.common.unknownError));
     } finally {
       setChaosRunning(false);
     }
@@ -221,24 +224,24 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
     setSubmitError(null);
     try {
       await flush();
-      if (saveError) throw new Error('O design não foi salvo; corrija a conexão antes de submeter.');
+      if (saveError) throw new Error(t.workspace.notSaved);
       const evaluation = await api.requestEvaluation(session.id);
       navigate(`/evaluations/${evaluation.id}`);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Não foi possível submeter.');
+      setSubmitError(error instanceof Error ? error.message : t.workspace.submitFailed);
       setSubmitting(false);
     }
   }
 
   function openMermaid() {
-    if (!mermaid.trim()) { setMermaid(designToMermaid(currentDesign())); touch(); }
+    if (!mermaid.trim()) { setMermaid(designToMermaid(currentDesign(), locale)); touch(); }
     setCenterTab('mermaid');
   }
 
   function applyMermaid() {
     const componentCount = nodes.filter((node) => node.type === 'component').length;
-    if (componentCount > 1 && !window.confirm('Substituir os componentes e conexões do canvas pelo diagrama Mermaid? As notas são mantidas.')) return;
-    const imported = mermaidToDesign(mermaid);
+    if (componentCount > 1 && !window.confirm(t.workspace.confirmApplyMermaid)) return;
+    const imported = mermaidToDesign(mermaid, locale);
     const flow = toFlow(imported);
     setNodes((current) => [...current.filter((node) => node.type === 'note'), ...flow.nodes]);
     setEdges(flow.edges);
@@ -256,21 +259,21 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
     <div className="workspace">
       <div className="workspace-bar">
         <div className="workspace-title">
-          <Link to={`/problems/${problem.id}`} className="icon-btn" aria-label="Voltar ao problema" title="Voltar ao problema"><ArrowLeft size={16} /></Link>
-          <button className={`icon-btn${leftOpen ? ' active' : ''}`} onClick={() => setLeftOpen((value) => !value)} aria-label="Mostrar enunciado" title="Enunciado e notas"><PanelLeft size={16} /></button>
+          <Link to={`/problems/${problem.id}`} className="icon-btn" aria-label={t.workspace.backToProblem} title={t.workspace.backToProblem}><ArrowLeft size={16} /></Link>
+          <button className={`icon-btn${leftOpen ? ' active' : ''}`} onClick={() => setLeftOpen((value) => !value)} aria-label={t.workspace.showBrief} title={t.workspace.briefAndNotes}><PanelLeft size={16} /></button>
           <span className="mono-dim">{padNumber(problem.number)}</span>
           <strong>{problem.title}</strong>
           <DifficultyBadge difficulty={problem.difficulty} />
         </div>
-        <div className="segmented" role="tablist" aria-label="Editor">
+        <div className="segmented" role="tablist" aria-label={t.workspace.editor}>
           <button role="tab" aria-selected={centerTab === 'canvas'} className={centerTab === 'canvas' ? 'active' : ''} onClick={() => setCenterTab('canvas')}><LayoutGrid size={14} />Canvas</button>
           <button role="tab" aria-selected={centerTab === 'mermaid'} className={centerTab === 'mermaid' ? 'active' : ''} onClick={openMermaid}><FileCode2 size={14} />Mermaid</button>
         </div>
         <div className="workspace-actions">
           <SessionTimer createdAt={session.createdAt} estimatedMinutes={problem.estimatedMinutes} />
           <SaveIndicator dirty={dirty} saving={saving} error={saveError} onRetry={() => void save()} />
-          <button className="btn btn-chaos btn-sm" onClick={() => setRightTab('chaos')}><Bomb size={14} />Chaos</button>
-          <button className="btn btn-primary btn-sm" onClick={() => setRightTab('judges')}><Gavel size={14} />Submeter</button>
+          <Button variant="chaos" size="sm" onClick={() => setRightTab('chaos')}><Bomb size={14} />{t.workspace.chaos}</Button>
+          <Button variant="primary" size="sm" onClick={() => setRightTab('judges')}><Gavel size={14} />{t.workspace.submit}</Button>
         </div>
       </div>
 
@@ -278,17 +281,17 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
         {leftOpen && (
           <aside className="side-panel left-panel">
             <div className="side-tabs" role="tablist">
-              <button role="tab" aria-selected={leftTab === 'brief'} className={leftTab === 'brief' ? 'active' : ''} onClick={() => setLeftTab('brief')}>Problema</button>
-              <button role="tab" aria-selected={leftTab === 'notes'} className={leftTab === 'notes' ? 'active' : ''} onClick={() => setLeftTab('notes')}>Notas{noteLength ? <span className="tab-count">{noteLength}</span> : null}</button>
+              <button role="tab" aria-selected={leftTab === 'brief'} className={leftTab === 'brief' ? 'active' : ''} onClick={() => setLeftTab('brief')}>{t.workspace.tabProblem}</button>
+              <button role="tab" aria-selected={leftTab === 'notes'} className={leftTab === 'notes' ? 'active' : ''} onClick={() => setLeftTab('notes')}>{t.workspace.tabNotes}{noteLength ? <span className="tab-count">{noteLength}</span> : null}</button>
             </div>
             <div className="side-scroll">
               {leftTab === 'brief' ? <Brief problem={problem} /> : (
                 <div className="notes-editor">
-                  <p className="muted small">Explique requisitos assumidos, contas de capacidade, modelo de dados e trade-offs. Os juízes leem tudo.</p>
+                  <p className="muted small">{t.workspace.notesHelp}</p>
                   <textarea
                     value={notes} maxLength={20000} onChange={(event) => { setNotes(event.target.value); touch(); }}
-                    placeholder={'## Premissas\n- 100:1 leitura/escrita…\n\n## Modelo de dados\n- short_code (PK) → long_url, created_at, expires_at\n\n## Trade-offs\n- Cache-aside com TTL de 24h porque…'}
-                    aria-label="Notas e trade-offs"
+                    placeholder={t.workspace.notesPlaceholder}
+                    aria-label={t.workspace.notesLabel}
                   />
                 </div>
               )}
@@ -303,7 +306,7 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
             <MermaidPanel
               source={mermaid}
               onChange={(value) => { setMermaid(value); touch(); }}
-              onGenerateFromCanvas={() => { setMermaid(designToMermaid(currentDesign())); setMermaidWarnings([]); touch(); }}
+              onGenerateFromCanvas={() => { setMermaid(designToMermaid(currentDesign(), locale)); setMermaidWarnings([]); touch(); }}
               onApplyToCanvas={applyMermaid}
               warnings={mermaidWarnings}
             />
@@ -312,9 +315,9 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
 
         <aside className="side-panel right-panel">
           <div className="side-tabs" role="tablist">
-            <button role="tab" aria-selected={rightTab === 'inspect'} className={rightTab === 'inspect' ? 'active' : ''} onClick={() => setRightTab('inspect')}><SlidersHorizontal size={13} />Inspetor</button>
-            <button role="tab" aria-selected={rightTab === 'chaos'} className={rightTab === 'chaos' ? 'active' : ''} onClick={() => setRightTab('chaos')}><Bomb size={13} />Chaos</button>
-            <button role="tab" aria-selected={rightTab === 'judges'} className={rightTab === 'judges' ? 'active' : ''} onClick={() => setRightTab('judges')}><Gavel size={13} />Juízes</button>
+            <button role="tab" aria-selected={rightTab === 'inspect'} className={rightTab === 'inspect' ? 'active' : ''} onClick={() => setRightTab('inspect')}><SlidersHorizontal size={13} />{t.workspace.tabInspector}</button>
+            <button role="tab" aria-selected={rightTab === 'chaos'} className={rightTab === 'chaos' ? 'active' : ''} onClick={() => setRightTab('chaos')}><Bomb size={13} />{t.workspace.chaos}</button>
+            <button role="tab" aria-selected={rightTab === 'judges'} className={rightTab === 'judges' ? 'active' : ''} onClick={() => setRightTab('judges')}><Gavel size={13} />{t.workspace.tabJudges}</button>
           </div>
           <div className="side-scroll">
             {rightTab === 'inspect' && <Inspector node={selectedNode} edge={selectedEdge} nodes={nodes} rubric={rubric} warnings={warnings} onNodeChange={onNodeChange} onEdgeChange={onEdgeChange} onDelete={onDelete} />}
@@ -339,26 +342,28 @@ function Workspace({ initial }: { initial: WorkspaceData }) {
 }
 
 function Brief({ problem }: { problem: ProblemDetail }) {
+  const { t } = useI18n();
   const [showHints, setShowHints] = useState(false);
   return (
     <div className="brief">
       <p className="body-text small">{problem.statement}</p>
-      <h4>Funcionais</h4>
+      <h4>{t.workspace.functional}</h4>
       <ul className="check-list compact">{problem.functionalRequirements.map((text) => <li key={text}>{text}</li>)}</ul>
-      <h4>Não-funcionais</h4>
+      <h4>{t.workspace.nonFunctional}</h4>
       <ul className="check-list compact">{problem.nonFunctionalRequirements.map((text) => <li key={text}>{text}</li>)}</ul>
-      <h4>Escala</h4>
+      <h4>{t.workspace.scale}</h4>
       <div className="scale-grid compact">
         {problem.scale.map((entry) => <div key={entry.label} className="scale-item"><span>{entry.label}</span><strong>{entry.value}</strong></div>)}
       </div>
-      <p className="muted small">O chaos usa pico de <b>{problem.peakRps.toLocaleString('pt-BR')} req/s</b> e orçamento de <b>{problem.latencyBudgetMs} ms</b>.</p>
-      <button className="hint-toggle" onClick={() => setShowHints((value) => !value)} aria-expanded={showHints}><Lightbulb size={14} />{showHints ? 'Esconder dicas' : 'Mostrar dicas'}</button>
+      <p className="muted small">{t.workspace.chaosProfile(formatNumber(problem.peakRps), problem.latencyBudgetMs)}</p>
+      <button className="hint-toggle" onClick={() => setShowHints((value) => !value)} aria-expanded={showHints}><Lightbulb size={14} />{showHints ? t.common.hideHints : t.common.showHints}</button>
       {showHints && <ol className="hint-list">{problem.hints.map((hint) => <li key={hint}>{hint}</li>)}</ol>}
     </div>
   );
 }
 
 function SessionTimer({ createdAt, estimatedMinutes }: { createdAt: string; estimatedMinutes: number }) {
+  const { t } = useI18n();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -367,14 +372,15 @@ function SessionTimer({ createdAt, estimatedMinutes }: { createdAt: string; esti
   const elapsed = Math.max(0, (now - Date.parse(createdAt)) / 1000);
   const over = elapsed > estimatedMinutes * 60;
   return (
-    <span className={`timer${over ? ' over' : ''}`} title={`Tempo desde o início da sessão · alvo de ${estimatedMinutes} min`}>
-      <Timer size={13} />{elapsed > 86_400 ? '> 1 dia' : formatDuration(elapsed)}<small>/ {estimatedMinutes}:00</small>
+    <span className={`timer${over ? ' over' : ''}`} title={t.workspace.timerTitle(estimatedMinutes)}>
+      <Timer size={13} />{elapsed > 86_400 ? t.time.overADay : formatDuration(elapsed)}<small>/ {estimatedMinutes}:00</small>
     </span>
   );
 }
 
 function SaveIndicator({ dirty, saving, error, onRetry }: { dirty: boolean; saving: boolean; error: string | null; onRetry: () => void }) {
-  if (error) return <button className="save-state error" onClick={onRetry} title={error}><CloudOff size={13} />Não salvo · tentar</button>;
-  if (saving || dirty) return <span className="save-state"><LoaderCircle size={13} className="spin" />Salvando</span>;
-  return <span className="save-state saved"><Check size={13} />Salvo</span>;
+  const { t } = useI18n();
+  if (error) return <button className="save-state error" onClick={onRetry} title={error}><CloudOff size={13} />{t.workspace.notSavedRetry}</button>;
+  if (saving || dirty) return <span className="save-state"><LoaderCircle size={13} className="spin" />{t.workspace.saving}</span>;
+  return <span className="save-state saved"><Check size={13} />{t.workspace.savedState}</span>;
 }

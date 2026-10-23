@@ -1,6 +1,8 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put } from '@nestjs/common';
 import { providerIdSchema, settingsUpdateSchema, type SettingsUpdateRequest } from '../../../shared/schemas/validation';
 import type { ProviderId } from '../../../shared/types/entities';
+import { localized, type Locale } from '../../../shared/i18n/locale';
+import { RequestLocale } from '../common/request-locale';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { AppError } from '../errors/app-error';
 import { ProviderError } from '../judges/llm-provider';
@@ -26,7 +28,7 @@ export class SettingsController {
     try {
       return { items: await provider.listModels() };
     } catch (error) {
-      throw new AppError(502, 'SERVICE_UNAVAILABLE', error instanceof Error ? error.message : 'Could not list models.');
+      throw new AppError(502, 'SERVICE_UNAVAILABLE', error instanceof Error ? error.message : localized('Não foi possível listar os modelos.', 'Could not list models.'));
     }
   }
 
@@ -36,8 +38,9 @@ export class SettingsController {
   async test(
     @Param('providerId', new ZodValidationPipe(providerIdSchema)) providerId: ProviderId,
     @Body() body: { model?: unknown },
+    @RequestLocale() locale: Locale,
   ) {
-    if (typeof body?.model !== 'string' || !body.model.trim()) throw new AppError(422, 'VALIDATION_ERROR', 'Choose a model to test.');
+    if (typeof body?.model !== 'string' || !body.model.trim()) throw new AppError(422, 'VALIDATION_ERROR', localized('Escolha um modelo para testar.', 'Choose a model to test.'));
     const provider = await this.settings.provider(providerId);
     const started = Date.now();
     try {
@@ -49,7 +52,7 @@ export class SettingsController {
       }) as { ok?: unknown };
       return { ok: answer?.ok === true, latencyMs: Date.now() - started };
     } catch (error) {
-      const message = error instanceof ProviderError || error instanceof Error ? error.message : 'The provider did not answer.';
+      const message = error instanceof ProviderError || error instanceof Error ? error.message : locale === 'en' ? 'The provider did not answer.' : 'O provedor não respondeu.';
       return { ok: false, latencyMs: Date.now() - started, error: message };
     }
   }

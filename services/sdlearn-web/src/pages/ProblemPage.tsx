@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BookOpen, Clock, Gavel, Lightbulb, Package, Play } from 'lucide-react';
 import { api } from '../api';
-import { DifficultyBadge, ErrorState, PageLoading, TagChip, VerdictBadge } from '../components/ui';
-import { padNumber, relativeTime, sessionStatusLabel } from '../lib/format';
+import { Button, DifficultyBadge, ErrorState, PageLoading, TagChip, VerdictBadge } from '../components/ui';
+import { useI18n } from '../i18n';
+import { formatNumber, padNumber, relativeTime } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 
 export function ProblemPage() {
+  const { t } = useI18n();
   const { problemId = '' } = useParams();
   const navigate = useNavigate();
   const problem = useAsync(() => api.getProblem(problemId), [problemId]);
@@ -23,19 +25,19 @@ export function ProblemPage() {
       const session = await api.createSession(problemId);
       navigate(`/sessions/${session.id}`);
     } catch (error) {
-      setStartError(error instanceof Error ? error.message : 'Não foi possível iniciar a sessão.');
+      setStartError(error instanceof Error ? error.message : t.problem.startFailed);
       setStarting(false);
     }
   }
 
   if (problem.loading) return <PageLoading />;
-  if (problem.error || !problem.data) return <div className="container page"><ErrorState message={problem.error ?? 'Problema não encontrado.'} onRetry={problem.reload} /></div>;
+  if (problem.error || !problem.data) return <div className="container page"><ErrorState message={problem.error ?? t.api.problemNotFound} onRetry={problem.reload} /></div>;
   const item = problem.data;
   const related = (articleList.data?.items ?? []).filter((article) => item.relatedArticles.includes(article.slug));
 
   return (
     <div className="container page">
-      <Link to="/" className="back-link"><ArrowLeft size={14} />Biblioteca</Link>
+      <Link to="/" className="back-link"><ArrowLeft size={14} />{t.problem.back}</Link>
       <header className="problem-header">
         <div className="problem-header-meta">
           <span className="mono-dim">{padNumber(item.number)}</span>
@@ -51,29 +53,29 @@ export function ProblemPage() {
       <div className="problem-layout">
         <div className="problem-main">
           <section className="panel">
-            <h2 className="panel-title">Enunciado</h2>
+            <h2 className="panel-title">{t.problem.statement}</h2>
             <p className="body-text">{item.statement}</p>
           </section>
           <div className="two-col">
             <section className="panel">
-              <h2 className="panel-title">Requisitos funcionais</h2>
+              <h2 className="panel-title">{t.problem.functional}</h2>
               <ul className="check-list">{item.functionalRequirements.map((text) => <li key={text}>{text}</li>)}</ul>
             </section>
             <section className="panel">
-              <h2 className="panel-title">Requisitos não-funcionais</h2>
+              <h2 className="panel-title">{t.problem.nonFunctional}</h2>
               <ul className="check-list">{item.nonFunctionalRequirements.map((text) => <li key={text}>{text}</li>)}</ul>
             </section>
           </div>
           <section className="panel">
-            <h2 className="panel-title">Escala</h2>
+            <h2 className="panel-title">{t.problem.scale}</h2>
             <div className="scale-grid">
               {item.scale.map((entry) => <div key={entry.label} className="scale-item"><span>{entry.label}</span><strong>{entry.value}</strong></div>)}
-              <div className="scale-item"><span>Orçamento de latência</span><strong>{item.latencyBudgetMs} ms</strong></div>
+              <div className="scale-item"><span>{t.problem.latencyBudget}</span><strong>{formatNumber(item.latencyBudgetMs)} ms</strong></div>
             </div>
           </section>
           <section className="panel">
             <button className="hint-toggle" onClick={() => setShowHints((value) => !value)} aria-expanded={showHints}>
-              <Lightbulb size={15} />{showHints ? 'Esconder dicas' : 'Mostrar dicas'}<span className="mono-dim">{item.hints.length}</span>
+              <Lightbulb size={15} />{showHints ? t.common.hideHints : t.common.showHints}<span className="mono-dim">{item.hints.length}</span>
             </button>
             {showHints && <ol className="hint-list">{item.hints.map((hint) => <li key={hint}>{hint}</li>)}</ol>}
           </section>
@@ -81,22 +83,22 @@ export function ProblemPage() {
 
         <aside className="problem-side">
           <section className="panel cta-panel">
-            <p className="eyebrow">// PRONTO?</p>
-            <h2>Abra o canvas</h2>
-            <p className="muted">Desenhe a arquitetura, rode cenários de chaos e submeta aos juízes quando estiver pronto.</p>
-            {item.keyPointCount > 0 && <p className="muted small gabarito-note"><Gavel size={13} />Os juízes conferem {item.keyPointCount} pontos-chave do gabarito. Eles aparecem só no resultado da avaliação.</p>}
-            <button className="btn btn-primary btn-block" onClick={() => void start()} disabled={starting}><Play size={15} />{starting ? 'Criando sessão…' : 'Começar novo design'}</button>
+            <p className="eyebrow">{t.problem.ready}</p>
+            <h2>{t.problem.openCanvas}</h2>
+            <p className="muted">{t.problem.openCanvasBody}</p>
+            {item.keyPointCount > 0 && <p className="muted small gabarito-note"><Gavel size={13} />{t.problem.keyPointNote(item.keyPointCount)}</p>}
+            <Button variant="primary" block onClick={() => void start()} disabled={starting}><Play size={15} />{starting ? t.problem.starting : t.problem.start}</Button>
             {startError && <p className="form-error">{startError}</p>}
           </section>
 
           <section className="panel">
-            <h2 className="panel-title">Suas sessões</h2>
-            {sessions.loading ? <p className="muted">Carregando…</p> : !sessions.data?.items.length ? <p className="muted">Nenhuma sessão ainda para este problema.</p> : (
+            <h2 className="panel-title">{t.problem.yourSessions}</h2>
+            {sessions.loading ? <p className="muted">{t.common.loading}</p> : !sessions.data?.items.length ? <p className="muted">{t.problem.noSessions}</p> : (
               <ul className="mini-list">
                 {sessions.data.items.map((session) => (
                   <li key={session.id}>
                     <Link to={`/sessions/${session.id}`}>
-                      <span><strong>{sessionStatusLabel[session.status]}</strong><small>{relativeTime(session.updatedAt)} · {session.componentCount} componentes</small></span>
+                      <span><strong>{t.sessionStatus[session.status]}</strong><small>{relativeTime(session.updatedAt)} · {t.common.components(session.componentCount)}</small></span>
                       <span className="mini-list-score">{session.bestScore ?? '—'}<VerdictBadge verdict={session.lastVerdict} /></span>
                     </Link>
                   </li>
@@ -107,7 +109,7 @@ export function ProblemPage() {
 
           {related.length > 0 && (
             <section className="panel">
-              <h2 className="panel-title"><BookOpen size={14} />Leituras relacionadas</h2>
+              <h2 className="panel-title"><BookOpen size={14} />{t.problem.relatedReading}</h2>
               <ul className="mini-list">
                 {related.map((article) => (
                   <li key={article.slug}>

@@ -1,10 +1,31 @@
-import type { ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { LoaderCircle, RotateCcw, TriangleAlert } from 'lucide-react';
 import type { Difficulty, Verdict } from '../types';
-import { scoreTone, verdictLabel } from '../lib/format';
+import { useI18n } from '../i18n';
+import { scoreTone } from '../lib/format';
+
+export type ButtonVariant = 'primary' | 'ghost' | 'danger' | 'chaos' | 'toggle';
+
+export interface ButtonStyle {
+  variant?: ButtonVariant;
+  /** Every size shares one height/padding scale, so buttons in the same row always line up. */
+  size?: 'sm' | 'md';
+  active?: boolean;
+  block?: boolean;
+}
+
+/** Class list for the shared button; use it directly on links that should look like buttons. */
+export function buttonClass({ variant = 'ghost', size = 'md', active = false, block = false }: ButtonStyle = {}, extra?: string): string {
+  return ['btn', `btn-${variant}`, size === 'sm' && 'btn-sm', active && 'active', block && 'btn-block', extra].filter(Boolean).join(' ');
+}
+
+export function Button({ variant, size, active, block, className, type = 'button', ...props }: ButtonStyle & ButtonHTMLAttributes<HTMLButtonElement>) {
+  return <button type={type} className={buttonClass({ variant, size, active, block }, className)} {...props} />;
+}
 
 export function DifficultyBadge({ difficulty }: { difficulty: Difficulty }) {
-  return <span className={`difficulty difficulty-${difficulty.toLowerCase()}`}>{difficulty}</span>;
+  const { t } = useI18n();
+  return <span className={`difficulty difficulty-${difficulty.toLowerCase()}`}>{t.difficulty[difficulty]}</span>;
 }
 
 export function TagChip({ children }: { children: ReactNode }) {
@@ -12,8 +33,9 @@ export function TagChip({ children }: { children: ReactNode }) {
 }
 
 export function VerdictBadge({ verdict }: { verdict: Verdict | null | undefined }) {
+  const { t } = useI18n();
   if (!verdict) return null;
-  return <span className={`verdict verdict-${verdict}`}>{verdictLabel[verdict]}</span>;
+  return <span className={`verdict verdict-${verdict}`}>{t.verdict[verdict]}</span>;
 }
 
 export function ScoreRing({ score, size = 120, label }: { score: number | null; size?: number; label?: string }) {
@@ -44,15 +66,17 @@ export function Spinner({ label }: { label?: string }) {
 }
 
 export function PageLoading() {
-  return <div className="page-loading"><Spinner label="Carregando…" /></div>;
+  const { t } = useI18n();
+  return <div className="page-loading"><Spinner label={t.common.loading} /></div>;
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="state-box state-error" role="alert">
       <TriangleAlert size={20} />
-      <div><strong>Algo deu errado</strong><p>{message}</p></div>
-      {onRetry && <button className="btn btn-ghost" onClick={onRetry}><RotateCcw size={14} />Tentar de novo</button>}
+      <div><strong>{t.common.somethingWrong}</strong><p>{message}</p></div>
+      {onRetry && <Button onClick={onRetry}><RotateCcw size={14} />{t.common.retry}</Button>}
     </div>
   );
 }

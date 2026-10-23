@@ -2,15 +2,27 @@ import { componentSpecs, type ComponentSpec } from '../catalog/components';
 import type {
   CanvasEdge, CanvasNode, ChaosRequest, ChaosResult, ChaosScenario, ComponentKind, NodeHealth, NodeReport,
 } from '../types/entities';
+import { engineMessages } from '../i18n/engine';
+import { defaultLocale, type Locale } from '../i18n/locale';
 
-export const chaosScenarios: ChaosScenario[] = [
-  { id: 'node-failure', name: 'Derrubar componente', description: 'Todas as réplicas do alvo ficam indisponíveis — falha de zona, deploy quebrado ou disco cheio.', target: 'node' },
-  { id: 'replica-loss', name: 'Perder réplicas', description: 'Algumas instâncias do alvo caem; as restantes precisam absorver a carga.', target: 'node', magnitude: { label: 'Réplicas perdidas', min: 1, max: 10, step: 1, default: 1, unit: '' } },
-  { id: 'network-partition', name: 'Partição de rede', description: 'A conexão selecionada para de funcionar entre os dois componentes.', target: 'edge' },
-  { id: 'traffic-spike', name: 'Pico de tráfego', description: 'O pico de requisições do problema é multiplicado.', target: 'none', magnitude: { label: 'Multiplicador', min: 1, max: 20, step: 1, default: 3, unit: '×' } },
-  { id: 'latency-injection', name: 'Injetar latência', description: 'O alvo responde mais devagar em cada chamada.', target: 'node', magnitude: { label: 'Latência extra', min: 10, max: 2000, step: 10, default: 250, unit: 'ms' } },
-  { id: 'chaos-monkey', name: 'Chaos Monkey', description: 'Uma instância aleatória de algum componente é derrubada.', target: 'none' },
+type ScenarioShape = Pick<ChaosScenario, 'id' | 'target'> & { magnitude?: Omit<NonNullable<ChaosScenario['magnitude']>, 'label'> };
+
+const scenarioShapes: ScenarioShape[] = [
+  { id: 'node-failure', target: 'node' },
+  { id: 'replica-loss', target: 'node', magnitude: { min: 1, max: 10, step: 1, default: 1, unit: '' } },
+  { id: 'network-partition', target: 'edge' },
+  { id: 'traffic-spike', target: 'none', magnitude: { min: 1, max: 20, step: 1, default: 3, unit: '×' } },
+  { id: 'latency-injection', target: 'node', magnitude: { min: 10, max: 2000, step: 10, default: 250, unit: 'ms' } },
+  { id: 'chaos-monkey', target: 'none' },
 ];
+
+export function chaosScenarios(locale: Locale = defaultLocale): ChaosScenario[] {
+  const text = engineMessages(locale).scenarios;
+  return scenarioShapes.map(({ magnitude, ...shape }) => ({
+    ...shape, name: text[shape.id].name, description: text[shape.id].description,
+    ...(magnitude ? { magnitude: { ...magnitude, label: text[shape.id].magnitude ?? '' } } : {}),
+  }));
+}
 
 export class ChaosInputError extends Error {}
 
@@ -41,7 +53,8 @@ export function formatRate(value: number): string {
   return String(Math.round(value));
 }
 
-export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, request: ChaosRequest, options: { skipSpofAnalysis?: boolean } = {}): ChaosResult {
+export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, request: ChaosRequest, options: { skipSpofAnalysis?: boolean; locale?: Locale } = {}): ChaosResult {
+  const text = engineMessages(options.locale).chaos;
   const components = graph.nodes.filter((node) => node.type === 'component' && node.data.kind && componentSpecs[node.data.kind]);
   const byId = new Map(components.map((node) => [node.id, node]));
   const edges = graph.edges.filter((edge) => byId.has(edge.source) && byId.has(edge.target) && edge.source !== edge.target);
@@ -58,7 +71,7 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
   let magnitude: number | null = request.magnitude ?? null;
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
   const requireNode = (): string => {
-    if (!targetId || !byId.has(targetId)) throw new ChaosInputError('Selecione um componente do canvas como alvo.');
+    if (!targetId || !byId.has(targetId)) throw new ChaosInputError(text.selectNode);
     return targetId;
   };
 
@@ -67,7 +80,7 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     case 'replica-loss': magnitude = Math.round(clamp(magnitude ?? 1, 1, 100)); lostReplicas.set(requireNode(), magnitude); break;
     case 'latency-injection': magnitude = clamp(magnitude ?? 250, 0, 60_000); extraLatency.set(requireNode(), magnitude); break;
     case 'network-partition':
-      if (!targetId || !edges.some((edge) => edge.id === targetId)) throw new ChaosInputError('Selecione uma conexão do canvas como alvo.');
+      if (!targetId || !edges.some((edge) => edge.id === targetId)) throw new ChaosInputError(text.selectEdge);
       cutEdges.add(targetId); magnitude = null; break;
     case 'traffic-spike': magnitude = clamp(magnitude ?? 3, 1, 1000); multiplier = magnitude; targetId = null; break;
     case 'chaos-monkey': {
@@ -89,7 +102,7 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     return {
       scenarioId: request.scenarioId, targetId, targetLabel, magnitude, outcome: 'outage', servedRatio: 0, latencyMs: 0,
       latencyBudgetMs: profile.latencyBudgetMs, nodes: [], cutEdges: [], singlePointsOfFailure: [],
-      findings: ['O canvas está vazio: adicione componentes e conexões antes de injetar falhas.'],
+      findings: [text.emptyCanvas],
     };
   }
 
@@ -148,7 +161,7 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     if (memo) return memo;
     if (isDown(id)) {
       dependencyHealth.set(id, 'down');
-      reasons.get(id)!.push('Todas as réplicas estão indisponíveis.');
+      reasons.get(id)!.push(text.allReplicasDown);
       return 'down';
     }
     if (visiting.has(id)) return 'healthy';
@@ -160,10 +173,10 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
       const names = group.edges.map((edge) => labelOf(edge.target)).join(', ');
       if (group.soft) {
         health = worst(health, 'degraded');
-        reasons.get(id)!.push(group.async ? `Consumidor ${names} indisponível — mensagens se acumulam.` : `${names} indisponível; operando degradado.`);
+        reasons.get(id)!.push(group.async ? text.consumerDown(names) : text.softDependencyDown(names));
       } else {
         health = worst(health, 'failing');
-        reasons.get(id)!.push(`Depende de ${names}, que está inacessível.`);
+        reasons.get(id)!.push(text.hardDependencyDown(names));
       }
     }
     visiting.delete(id);
@@ -220,23 +233,23 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
     const lost = lostReplicas.get(id) ?? 0;
     if (!isDown(id) && lost > 0) {
       health = worst(health, 'degraded');
-      reasons.get(id)!.push(`${lost} de ${replicasOf(id)} réplicas perdidas.`);
+      reasons.get(id)!.push(text.replicasLost(lost, replicasOf(id)));
     }
     const capacity = capacityOf(id);
     const nodeLoad = load.get(id)!;
     if (!isDown(id) && nodeLoad > capacity) {
       health = worst(health, 'degraded');
-      reasons.get(id)!.push(`Sobrecarga: ${formatRate(nodeLoad)} req/s para capacidade de ${formatRate(capacity)} req/s (${Math.round((nodeLoad / capacity) * 100)}%).`);
+      reasons.get(id)!.push(text.overload(formatRate(nodeLoad), formatRate(capacity), Math.round((nodeLoad / capacity) * 100)));
     }
     const queued = backlog.get(id);
-    if (queued) reasons.get(id)!.push(`Backlog cresce ~${formatRate(queued)} msg/s: consumidores não acompanham.`);
+    if (queued) reasons.get(id)!.push(text.backlog(formatRate(queued)));
     if ((extraLatency.get(id) ?? 0) > 0) {
       health = worst(health, 'degraded');
-      reasons.get(id)!.push(`+${extraLatency.get(id)} ms por chamada.`);
+      reasons.get(id)!.push(text.extraLatency(extraLatency.get(id)!));
     }
     if (!reached.has(id) && !isDown(id)) {
       health = 'unreachable';
-      reasons.get(id)!.push('Nenhum caminho a partir das entradas alcança este componente.');
+      reasons.get(id)!.push(text.unreachable);
     }
     finalHealth.set(id, health);
   }
@@ -301,22 +314,22 @@ export function simulateChaos(graph: ChaosGraph, profile: ChaosLoadProfile, requ
 
   const outcome: ChaosResult['outcome'] = servedRatio >= 0.99 && latencyMs <= profile.latencyBudgetMs ? 'survived' : servedRatio < 0.5 ? 'outage' : 'degraded';
   const findings: string[] = [];
-  findings.push(`${Math.round(servedRatio * 1000) / 10}% das requisições atendidas com ${formatRate(totalTraffic)} req/s de tráfego.`);
-  if (latencyMs > profile.latencyBudgetMs) findings.push(`Latência estimada de ${latencyMs} ms excede o orçamento de ${profile.latencyBudgetMs} ms.`);
-  else findings.push(`Latência estimada de ${latencyMs} ms dentro do orçamento de ${profile.latencyBudgetMs} ms.`);
+  findings.push(text.served(Math.round(servedRatio * 1000) / 10, formatRate(totalTraffic)));
+  if (latencyMs > profile.latencyBudgetMs) findings.push(text.latencyOverBudget(latencyMs, profile.latencyBudgetMs));
+  else findings.push(text.latencyWithinBudget(latencyMs, profile.latencyBudgetMs));
   for (const report of nodes) {
     if (report.health !== 'healthy' && report.reasons.length) findings.push(`${report.label}: ${report.reasons.join(' ')}`);
   }
   if (targetId && byId.has(targetId) && outcome === 'survived' && (lostReplicas.has(targetId))) {
-    findings.push(`A redundância absorveu a falha em ${labelOf(targetId)}.`);
+    findings.push(text.redundancyAbsorbed(labelOf(targetId)));
   }
-  if (entries.every((entry) => groupsOf(entry.id).length === 0)) findings.push('As entradas não estão conectadas a nenhum componente: nenhuma requisição é atendida.');
-  if (!entries.some((entry) => specOf(entry.id).entry)) findings.push('Nenhum Client no canvas: as entradas foram inferidas pelos componentes sem conexões de entrada.');
+  if (entries.every((entry) => groupsOf(entry.id).length === 0)) findings.push(text.entriesDisconnected);
+  if (!entries.some((entry) => specOf(entry.id).entry)) findings.push(text.noClient);
 
   let singlePointsOfFailure: ChaosResult['singlePointsOfFailure'] = [];
   if (!options.skipSpofAnalysis) {
     singlePointsOfFailure = findSinglePointsOfFailure(graph, profile);
-    if (singlePointsOfFailure.length) findings.push(`Pontos únicos de falha: ${singlePointsOfFailure.map((item) => item.label).join(', ')}.`);
+    if (singlePointsOfFailure.length) findings.push(text.singlePointsOfFailure(singlePointsOfFailure.map((item) => item.label).join(', ')));
   }
 
   return {

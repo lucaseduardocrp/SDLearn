@@ -1,5 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Button } from '../components/ui';
+import { useI18n } from '../i18n';
 
 interface MermaidPanelProps {
   source: string;
@@ -31,10 +33,14 @@ function loadMermaid() {
 }
 
 export function MermaidPanel({ source, onChange, onGenerateFromCanvas, onApplyToCanvas, warnings }: MermaidPanelProps) {
+  const { t } = useI18n();
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const holder = useRef<HTMLDivElement>(null);
   const baseId = useId().replace(/[^a-zA-Z0-9]/g, '');
+  // Read through a ref so switching language does not re-render the diagram.
+  const invalidSyntax = useRef(t.mermaid.invalid);
+  invalidSyntax.current = t.mermaid.invalid;
 
   useEffect(() => {
     if (!source.trim()) { setSvg(null); setError(null); return; }
@@ -45,7 +51,7 @@ export function MermaidPanel({ source, onChange, onGenerateFromCanvas, onApplyTo
           const rendered = await mermaid.render(`mmd${baseId}${Date.now()}`, source);
           if (active) { setSvg(rendered.svg); setError(null); }
         } catch (renderError) {
-          if (active) setError(renderError instanceof Error ? renderError.message.split('\n').slice(0, 3).join(' ') : 'Sintaxe Mermaid inválida.');
+          if (active) setError(renderError instanceof Error ? renderError.message.split('\n').slice(0, 3).join(' ') : invalidSyntax.current);
         }
       });
     }, 250);
@@ -72,8 +78,8 @@ export function MermaidPanel({ source, onChange, onGenerateFromCanvas, onApplyTo
         <div className="mermaid-toolbar">
           <span className="mono-dim">diagram.mmd</span>
           <div>
-            <button className="btn btn-ghost btn-sm" onClick={onGenerateFromCanvas} title="Substitui o texto pelo diagrama gerado a partir do canvas"><RefreshCw size={13} />Gerar do canvas</button>
-            <button className="btn btn-ghost btn-sm" onClick={onApplyToCanvas} disabled={!source.trim()} title="Substitui o canvas pelos nós e conexões deste diagrama"><ArrowDownToLine size={13} />Aplicar no canvas</button>
+            <Button size="sm" onClick={onGenerateFromCanvas} title={t.mermaid.generateTitle}><RefreshCw size={13} />{t.mermaid.generate}</Button>
+            <Button size="sm" onClick={onApplyToCanvas} disabled={!source.trim()} title={t.mermaid.applyTitle}><ArrowDownToLine size={13} />{t.mermaid.apply}</Button>
           </div>
         </div>
         <textarea
@@ -81,16 +87,16 @@ export function MermaidPanel({ source, onChange, onGenerateFromCanvas, onApplyTo
           value={source}
           onChange={(event) => onChange(event.target.value)}
           spellCheck={false}
-          aria-label="Código Mermaid"
+          aria-label={t.mermaid.codeLabel}
           placeholder={'flowchart LR\n  U([Users]) --> LB[Load Balancer]\n  LB --> API[URL Service ×3]\n  API --> C[[Redis Cache]]\n  API --> DB[(Cassandra)]\n  API -.->|click events| K[/Kafka/]'}
         />
         {warnings.length > 0 && <div className="mermaid-warnings">{warnings.slice(0, 4).map((warning) => <p key={warning}><TriangleAlert size={12} />{warning}</p>)}</div>}
-        <p className="mermaid-help">Formas viram tipos: <code>([x])</code> client · <code>[(x)]</code> banco · <code>[[x]]</code> cache · <code>[/x/]</code> fila · <code>{'{{x}}'}</code> CDN. Nomes como “Redis”, “Kafka” ou “S3” também são reconhecidos. <code>×3</code> no rótulo = 3 réplicas; <code>-.-&gt;</code> = assíncrono.</p>
+        <p className="mermaid-help">{t.mermaid.help}</p>
       </div>
-      <div className="mermaid-preview" aria-label="Pré-visualização do diagrama">
+      <div className="mermaid-preview" aria-label={t.mermaid.preview}>
         {error ? <div className="mermaid-error"><TriangleAlert size={16} /><span>{error}</span></div>
           : svg ? <div ref={holder} className="mermaid-svg" dangerouslySetInnerHTML={{ __html: svg }} />
-            : <p className="muted">Escreva um diagrama ou gere a partir do canvas.</p>}
+            : <p className="muted">{t.mermaid.empty}</p>}
       </div>
     </div>
   );

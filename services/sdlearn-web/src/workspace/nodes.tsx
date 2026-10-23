@@ -2,15 +2,15 @@ import { createContext, useContext } from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { componentSpecs } from '@shared/catalog/components';
 import { formatRate } from '@shared/engine/chaos';
-import type { ChaosResult, NodeReport } from '../types';
+import type { ChaosResult } from '../types';
+import { useI18n } from '../i18n';
 import type { ComponentFlowNode, NoteFlowNode } from './designModel';
 import { kindIcons } from './kindIcons';
 
 export const ChaosOverlayContext = createContext<ChaosResult | null>(null);
 
-const healthLabel: Record<NodeReport['health'], string> = { healthy: 'OK', degraded: 'Degradado', failing: 'Falhando', down: 'Fora do ar', unreachable: 'Inacessível' };
-
 export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNode>) {
+  const { t } = useI18n();
   const overlay = useContext(ChaosOverlayContext);
   const report = overlay?.nodes.find((item) => item.id === id);
   const spec = componentSpecs[data.kind];
@@ -27,7 +27,7 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
       </span>
       {report && (
         <span className="cnode-health">
-          <b>{healthLabel[report.health]}</b>
+          <b>{t.canvas.health[report.health]}</b>
           {report.capacity > 0 && <span className="cnode-load" title={`${formatRate(report.load)} / ${formatRate(report.capacity)} req/s`}><i style={{ width: `${Math.min(100, utilization * 100)}%` }} /></span>}
         </span>
       )}
@@ -37,18 +37,19 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
 }
 
 export function NoteNode({ id, data, selected }: NodeProps<NoteFlowNode>) {
+  const { t } = useI18n();
   const { updateNodeData } = useReactFlow();
   return (
     <div className={`note-node${selected ? ' selected' : ''}`}>
-      <span className="note-grip">NOTA</span>
+      <span className="note-grip">{t.canvas.noteGrip}</span>
       <textarea
         className="nodrag nowheel"
         value={data.label}
-        placeholder="Anote uma decisão, um trade-off ou uma premissa…"
+        placeholder={t.canvas.notePlaceholder}
         onChange={(event) => updateNodeData(id, { label: event.target.value })}
         rows={4}
         maxLength={2000}
-        aria-label="Texto da nota"
+        aria-label={t.canvas.noteLabel}
       />
     </div>
   );
